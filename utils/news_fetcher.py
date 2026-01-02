@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class NewsSource:
     """Individual news source configuration"""
-    def __init__(self, name: str, rss_url: str, base_url: str = None):
+    def __init__(self, name: str, rss_url: str, base_url: Optional[str] = None):
         self.name = name
         self.rss_url = rss_url
         self.base_url = base_url
@@ -98,7 +98,7 @@ class FinanceNewsFetcher:
                         'summary': summary,
                         'published': pub_date,
                         'source': source_name,
-                        'author': entry.author if hasattr(entry, 'author') else 'Unknown'
+                        'author': getattr(entry, 'author', 'Unknown')
                     }
                     articles.append(article)
                     
@@ -112,7 +112,7 @@ class FinanceNewsFetcher:
             logger.error(f"Error fetching RSS feed from {source_name}: {str(e)}")
             return []
     
-    def get_market_news(self, sources: List[str] = None, limit: int = 20) -> List[Dict]:
+    def get_market_news(self, sources: Optional[List[str]] = None, limit: int = 20) -> List[Dict]:
         """
         Get latest market news from specified sources
         """

@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 # Database setup
 DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -345,6 +347,7 @@ class DatabaseManager:
     
     def deactivate_alert(self, alert_id: str):
         """Deactivate a market alert"""
+        session = None
         try:
             session = self.get_session()
             
@@ -744,9 +747,9 @@ class DatabaseManager:
         """Store fundamental analysis result"""
         session = None
         try:
+            import json
             session = self.get_session()
             
-            import json
             analysis = FundamentalAnalysis(
                 symbol=symbol,
                 analysis_type=analysis_type,
@@ -769,6 +772,7 @@ class DatabaseManager:
     def get_fundamental_analysis(self, symbol: str, analysis_type: str = None, limit: int = 5) -> List[Dict]:
         """Get stored fundamental analysis results"""
         try:
+            import json
             session = self.get_session()
             
             query = session.query(FundamentalAnalysis).filter(
@@ -782,7 +786,6 @@ class DatabaseManager:
             
             session.close()
             
-            import json
             return [{
                 'id': str(analysis.id),
                 'symbol': analysis.symbol,
