@@ -584,13 +584,19 @@ elif page == "News":
                 "Symbol",
                 ['SPY', 'QQQ', 'DIA', 'GLD', 'SLV', 'USO', 'UNG', '^VIX', 'XLK', 'XLV', 'XLE', 'XLF']
             )
+            news_sector = None
+            search_query = None
         elif news_type == "Sector News":
             news_sector = st.selectbox(
                 "Sector",
                 ["Technology", "Healthcare", "Finance", "Energy", "Retail"]
             )
+            news_symbol = None
+            search_query = None
         elif news_type == "Search":
             search_query = st.text_input("Search Terms", placeholder="e.g., inflation, earnings, fed")
+            news_symbol = None
+            news_sector = None
         else:
             news_symbol = None
             news_sector = None

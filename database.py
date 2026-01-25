@@ -203,6 +203,7 @@ class DatabaseManager:
     
     def save_user_preferences(self, user_id: str, preferences: Dict):
         """Save user preferences"""
+        session = None
         try:
             session = self.get_session()
             
@@ -214,9 +215,9 @@ class DatabaseManager:
             if existing:
                 # Update existing preferences
                 for key, value in preferences.items():
-                    if hasattr(existing, key):
+                    if hasattr(existing, key) and key != 'id':
                         setattr(existing, key, value)
-                existing.updated_at = datetime.utcnow()
+                # updated_at will be handled by SQLAlchemy onupdate
             else:
                 # Create new preferences
                 user_prefs = UserPreferences(
@@ -226,12 +227,13 @@ class DatabaseManager:
                 session.add(user_prefs)
             
             session.commit()
-            session.close()
             
         except Exception as e:
             logger.error(f"Error saving user preferences: {str(e)}")
             if session:
                 session.rollback()
+        finally:
+            if session:
                 session.close()
     
     def get_user_preferences(self, user_id: str) -> Optional[Dict]:
@@ -259,6 +261,7 @@ class DatabaseManager:
     
     def create_market_alert(self, user_id: str, symbol: str, alert_type: str, target_price: float):
         """Create a market alert"""
+        session = None
         try:
             session = self.get_session()
             
@@ -271,18 +274,18 @@ class DatabaseManager:
             
             session.add(alert)
             session.commit()
-            session.close()
-            
             return True
             
         except Exception as e:
             logger.error(f"Error creating market alert: {str(e)}")
             if session:
                 session.rollback()
-                session.close()
             return False
+        finally:
+            if session:
+                session.close()
     
-    def get_active_alerts(self, user_id: str = None) -> List[Dict]:
+    def get_active_alerts(self, user_id: Optional[str] = None) -> List[Dict]:
         """Get active market alerts"""
         try:
             session = self.get_session()
@@ -359,12 +362,12 @@ class DatabaseManager:
                 alert.is_active = False
                 session.commit()
             
-            session.close()
-            
         except Exception as e:
             logger.error(f"Error deactivating alert {alert_id}: {str(e)}")
             if session:
                 session.rollback()
+        finally:
+            if session:
                 session.close()
     
     def get_market_statistics(self) -> Dict:
@@ -769,7 +772,7 @@ class DatabaseManager:
                 session.close()
             return False
     
-    def get_fundamental_analysis(self, symbol: str, analysis_type: str = None, limit: int = 5) -> List[Dict]:
+    def get_fundamental_analysis(self, symbol: str, analysis_type: Optional[str] = None, limit: int = 5) -> List[Dict]:
         """Get stored fundamental analysis results"""
         try:
             import json
@@ -786,14 +789,22 @@ class DatabaseManager:
             
             session.close()
             
-            return [{
-                'id': str(analysis.id),
-                'symbol': analysis.symbol,
-                'analysis_type': analysis.analysis_type,
-                'analysis_result': json.loads(analysis.analysis_result),
-                'period': analysis.period,
-                'created_at': analysis.created_at
-            } for analysis in analyses]
+            results = []
+            for analysis in analyses:
+                # Get the string content if it's a Column object
+                result_str = analysis.analysis_result
+                if hasattr(result_str, 'key'): # It's a Column object or similar
+                    result_str = str(result_str)
+                
+                results.append({
+                    'id': str(analysis.id),
+                    'symbol': analysis.symbol,
+                    'analysis_type': analysis.analysis_type,
+                    'analysis_result': json.loads(result_str),
+                    'period': analysis.period,
+                    'created_at': analysis.created_at
+                })
+            return results
             
         except Exception as e:
             logger.error(f"Error getting fundamental analysis: {str(e)}")
