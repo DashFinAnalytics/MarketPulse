@@ -13,11 +13,31 @@ logger = logging.getLogger(__name__)
 
 # Database setup
 DATABASE_URL = os.getenv('DATABASE_URL')
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable is not set")
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = None
+SessionLocal = None
 Base = declarative_base()
+
+def get_engine():
+    global engine
+    if engine is None:
+        if not DATABASE_URL:
+            logger.error("DATABASE_URL environment variable is not set")
+            return None
+        try:
+            engine = create_engine(DATABASE_URL)
+        except Exception as e:
+            logger.error(f"Failed to create database engine: {str(e)}")
+            return None
+    return engine
+
+def get_session_factory():
+    global SessionLocal
+    if SessionLocal is None:
+        engine = get_engine()
+        if engine is None:
+            return None
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    return SessionLocal
 
 class FinancialData(Base):
     """Store historical financial data"""
@@ -129,20 +149,26 @@ class DatabaseManager:
     """Manage database operations for the finance dashboard"""
     
     def __init__(self):
-        self.engine = engine
-        self.SessionLocal = SessionLocal
+        pass
         
     def create_tables(self):
         """Create all database tables"""
         try:
-            Base.metadata.create_all(bind=self.engine)
+            db_engine = get_engine()
+            if db_engine is None:
+                logger.warning("Database engine not available - skipping table creation")
+                return
+            Base.metadata.create_all(bind=db_engine)
             logger.info("Database tables created successfully")
         except Exception as e:
             logger.error(f"Error creating tables: {str(e)}")
             
-    def get_session(self) -> Session:
+    def get_session(self) -> Optional[Session]:
         """Get database session"""
-        return self.SessionLocal()
+        factory = get_session_factory()
+        if factory is None:
+            return None
+        return factory()
     
     def store_financial_data(self, symbol: str, data: Dict, data_type: str):
         """Store financial data in database"""

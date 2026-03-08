@@ -6,12 +6,15 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
 import time
+import logging
 from utils.data_fetcher import DataFetcher
 from utils.charts import create_price_chart, create_performance_chart, create_enhanced_price_chart, create_chart_from_db_data
 from utils.intervals import FinanceIntervals
 from utils.news_fetcher import news_fetcher
 from database import db_manager
 import json
+
+logger = logging.getLogger(__name__)
 
 # Page configuration
 st.set_page_config(
@@ -29,15 +32,19 @@ def initialize_database():
         db_manager.create_tables()
         return True
     except Exception as e:
-        st.error(f"Database initialization failed: {str(e)}")
+        logger.warning(f"Database initialization failed: {str(e)}")
         return False
 
 @st.cache_resource
 def get_data_fetcher():
     return DataFetcher()
 
-# Initialize database
-db_initialized = initialize_database()
+# Initialize database (don't fail app if it errors)
+try:
+    db_initialized = initialize_database()
+except:
+    db_initialized = False
+
 data_fetcher = get_data_fetcher()
 
 # Main title
