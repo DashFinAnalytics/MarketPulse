@@ -12,7 +12,7 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+openai_client = None
 
 class AIValuationAnalyzer:
     """
@@ -20,6 +20,13 @@ class AIValuationAnalyzer:
     """
     
     def __init__(self):
+        global openai_client
+        if openai_client is None:
+            try:
+                openai_client = OpenAI(api_key=OPENAI_API_KEY)
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenAI client: {str(e)}")
+                openai_client = None
         self.client = openai_client
         self.model = "gpt-5"
     
