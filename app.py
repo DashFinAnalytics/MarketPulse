@@ -689,7 +689,7 @@ elif page == "News":
             st.info("No stored articles found.")
 
 elif page == "Fundamental Analysis":
-    from pages.fundamental_analysis import render_fundamental_analysis_page
+    from page_modules.fundamental_analysis import render_fundamental_analysis_page
     render_fundamental_analysis_page()
 
 elif page == "Portfolio":
