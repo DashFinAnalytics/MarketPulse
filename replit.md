@@ -99,12 +99,20 @@ The application is designed for cloud deployment on platforms like:
 - Caching for performance optimization
 - Error handling for API rate limits
 
+## Port Configuration Note
+
+**Port 5000 has a broken port-detection loop in this Replit environment** (Replit's health check verifies the port via the external URL before routing is established, creating a circular dependency). The app runs on **port 8080** instead:
+- Workflow command: `streamlit run app.py --server.port 8080 --browser.gatherUsageStats false`
+- `waitForPort: 8080`, `outputType: "webview"`
+- `.streamlit/config.toml` still says 5000 but the CLI flag overrides it
+
 ## Changelog
 
 - July 05, 2025. Initial setup
 - July 05, 2025. Added PostgreSQL database integration with financial data storage, historical analysis, market alerts, and database statistics pages
 - July 05, 2025. Added news and portfolio tracking functionality with RSS feeds from major financial sources and comprehensive portfolio management system
 - October 04, 2025. Added Fundamental Analysis page with AI-powered valuation analysis using OpenAI GPT-5, supporting 5 years of earnings history with quarterly/annual data, multiple valuation frameworks (comprehensive, growth, value, DCF), visual trend analysis of key financial metrics, and database caching of AI analysis results
+- March 12, 2026. Fixed app startup: lazy database/OpenAI initialization, moved to port 8080 (port 5000 detection broken in this Replit env), fixed workflow configuration
 
 ## User Preferences
 
