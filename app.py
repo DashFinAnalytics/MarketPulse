@@ -8,7 +8,14 @@ from datetime import datetime, timedelta
 import time
 import logging
 from utils.data_fetcher import DataFetcher
-from utils.charts import create_price_chart, create_performance_chart, create_enhanced_price_chart, create_chart_from_db_data
+from utils.charts import (
+    create_price_chart, create_performance_chart, create_enhanced_price_chart,
+    create_chart_from_db_data, create_vix_interpretation_chart, create_yield_curve_chart,
+    create_correlation_heatmap, create_volume_chart, create_risk_metrics_chart,
+    create_drawdown_chart, create_rolling_volatility_chart,
+    create_options_oi_chart, create_options_iv_smile,
+    create_forex_heatmap, create_futures_comparison_chart
+)
 from utils.intervals import FinanceIntervals
 from utils.news_fetcher import news_fetcher
 from database import db_manager
@@ -55,7 +62,12 @@ st.markdown("---")
 st.sidebar.header("Dashboard Controls")
 
 # Navigation
-page = st.sidebar.selectbox("Navigate", ["Live Dashboard", "Historical Data", "Fundamental Analysis", "Market Alerts", "News", "Portfolio", "Database Stats"])
+page = st.sidebar.selectbox("Navigate", [
+    "Live Dashboard", "Historical Data", "Fundamental Analysis",
+    "Forex & Currencies", "Futures", "Options Flow",
+    "Risk Analysis", "Earnings & Events",
+    "Market Alerts", "News", "Portfolio", "Database Stats"
+])
 
 # Auto-refresh controls (only for live dashboard)
 if page == "Live Dashboard":
@@ -309,11 +321,36 @@ if page == "Live Dashboard":
             st.error("Failed to load VIX data")
 
     with vix_col2:
-        # VIX Chart
         if vix_data:
-            vix_chart = create_enhanced_price_chart('^VIX', '30d', use_yfinance=True)
-            if vix_chart:
-                st.plotly_chart(vix_chart, use_container_width=True)
+            vix_gauge = create_vix_interpretation_chart(vix_data['price'])
+            if vix_gauge:
+                st.plotly_chart(vix_gauge, use_container_width=True)
+
+    vix_chart = create_enhanced_price_chart('^VIX', '30d', use_yfinance=True)
+    if vix_chart:
+        st.plotly_chart(vix_chart, use_container_width=True)
+
+    st.markdown("---")
+
+    # Yield Curve Section
+    st.header("📐 US Treasury Yield Curve")
+    yc_col1, yc_col2, yc_col3, yc_col4 = st.columns(4)
+    bond_yields = data_fetcher.get_bond_yields()
+    labels_map = {'3M': '3-Month', '5Y': '5-Year', '10Y': '10-Year', '30Y': '30-Year'}
+    for col, key in zip([yc_col1, yc_col2, yc_col3, yc_col4], ['3M', '5Y', '10Y', '30Y']):
+        with col:
+            if key in bond_yields:
+                d = bond_yields[key]
+                chg = d['change']
+                arrow = "↑" if chg >= 0 else "↓"
+                color = "red" if chg >= 0 else "green"
+                st.metric(labels_map[key], f"{d['yield']:.2f}%",
+                          delta=f"{chg:+.3f}%")
+    yc_chart = create_yield_curve_chart(bond_yields)
+    if yc_chart:
+        st.plotly_chart(yc_chart, use_container_width=True)
+    else:
+        st.info("Yield curve data loading…")
 
     st.markdown("---")
 
@@ -379,11 +416,24 @@ if page == "Live Dashboard":
 
     # Sector Performance Chart
     st.subheader("📊 Sector Performance Comparison")
-    all_sectors = data_fetcher.get_sector_etfs(['XLK', 'XLV', 'XLE', 'XLF'])
+    all_sectors = data_fetcher.get_sector_etfs(['XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLU', 'XLB', 'XLRE'])
     if all_sectors:
         sector_chart = create_performance_chart(all_sectors)
         if sector_chart:
             st.plotly_chart(sector_chart, use_container_width=True)
+
+    st.markdown("---")
+
+    # Asset Correlation Heatmap
+    st.header("🔥 Asset Correlation Heatmap")
+    st.caption("3-month daily returns correlation across major asset classes")
+    corr_symbols = ['SPY', 'QQQ', 'DIA', 'GLD', 'SLV', 'USO', '^VIX', 'TLT', 'XLK', 'XLE', 'EURUSD=X']
+    with st.spinner("Building correlation matrix…"):
+        corr_chart = create_correlation_heatmap(corr_symbols, period="3mo")
+    if corr_chart:
+        st.plotly_chart(corr_chart, use_container_width=True)
+    else:
+        st.info("Correlation data loading…")
 
     st.markdown("---")
 
@@ -691,6 +741,366 @@ elif page == "News":
 elif page == "Fundamental Analysis":
     from page_modules.fundamental_analysis import render_fundamental_analysis_page
     render_fundamental_analysis_page()
+
+# ─────────────────────────────────────────────────────────
+# FOREX & CURRENCIES
+# ─────────────────────────────────────────────────────────
+elif page == "Forex & Currencies":
+    st.header("💱 Forex & Currency Markets")
+    st.caption("Live exchange rates — all quoted against USD")
+
+    all_pairs = {
+        'EURUSD=X': 'EUR/USD', 'GBPUSD=X': 'GBP/USD', 'USDJPY=X': 'USD/JPY',
+        'USDCHF=X': 'USD/CHF', 'AUDUSD=X': 'AUD/USD', 'USDCAD=X': 'USD/CAD',
+        'NZDUSD=X': 'NZD/USD', 'USDCNY=X': 'USD/CNY',
+        'USDINR=X': 'USD/INR', 'USDMXN=X': 'USD/MXN',
+        'USDBRL=X': 'USD/BRL', 'USDSGD=X': 'USD/SGD'
+    }
+
+    with st.spinner("Loading forex data…"):
+        forex_data = data_fetcher.get_forex_data(list(all_pairs.keys()))
+
+    if forex_data:
+        fx_heatmap = create_forex_heatmap(forex_data)
+        if fx_heatmap:
+            st.plotly_chart(fx_heatmap, use_container_width=True)
+
+        st.subheader("📋 Rates Table")
+        rows = []
+        for sym, label in all_pairs.items():
+            if sym in forex_data:
+                d = forex_data[sym]
+                rows.append({
+                    'Pair': label,
+                    'Rate': round(d['price'], 5),
+                    'Change': round(d['change'], 5),
+                    'Change %': f"{d['change_pct']:+.3f}%",
+                    'Direction': '🟢 Up' if d['change'] >= 0 else '🔴 Down'
+                })
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.error("Failed to load forex data")
+
+    st.markdown("---")
+    st.subheader("📈 Currency Price Chart")
+    fx_symbol = st.selectbox("Select pair", list(all_pairs.keys()),
+                              format_func=lambda x: all_pairs[x])
+    fx_period = st.select_slider("Period", ['1mo', '3mo', '6mo', '1y', '2y'], value='3mo')
+    with st.spinner("Loading chart…"):
+        fx_chart = create_price_chart(fx_symbol, all_pairs.get(fx_symbol, fx_symbol),
+                                      period=fx_period, interval='1d')
+    if fx_chart:
+        st.plotly_chart(fx_chart, use_container_width=True)
+
+# ─────────────────────────────────────────────────────────
+# FUTURES
+# ─────────────────────────────────────────────────────────
+elif page == "Futures":
+    st.header("📦 Futures Markets")
+
+    futures_groups = {
+        'Equity Index Futures': ['ES=F', 'NQ=F', 'YM=F', 'RTY=F'],
+        'Precious Metals': ['GC=F', 'SI=F', 'PL=F'],
+        'Energy': ['CL=F', 'NG=F', 'RB=F'],
+        'Treasury / Bond': ['ZB=F', 'ZN=F', 'ZT=F'],
+        'Agricultural': ['ZC=F', 'ZW=F', 'ZS=F']
+    }
+
+    futures_names = {
+        'ES=F': 'S&P 500', 'NQ=F': 'NASDAQ-100', 'YM=F': 'Dow Jones', 'RTY=F': 'Russell 2000',
+        'GC=F': 'Gold', 'SI=F': 'Silver', 'PL=F': 'Platinum',
+        'CL=F': 'Crude Oil (WTI)', 'NG=F': 'Natural Gas', 'RB=F': 'RBOB Gasoline',
+        'ZB=F': '30Y T-Bond', 'ZN=F': '10Y T-Note', 'ZT=F': '2Y T-Note',
+        'ZC=F': 'Corn', 'ZW=F': 'Wheat', 'ZS=F': 'Soybeans'
+    }
+
+    all_contracts = [c for group in futures_groups.values() for c in group]
+    with st.spinner("Loading futures data…"):
+        futures_data = data_fetcher.get_futures_data(all_contracts)
+
+    for group_name, contracts in futures_groups.items():
+        st.subheader(f"🔹 {group_name}")
+        group_data = {c: futures_data[c] for c in contracts if c in futures_data}
+        if not group_data:
+            st.info(f"Data unavailable for {group_name}")
+            continue
+
+        cols = st.columns(len(group_data))
+        for col, (sym, d) in zip(cols, group_data.items()):
+            with col:
+                label = futures_names.get(sym, sym)
+                delta_color = "normal" if d['change'] >= 0 else "inverse"
+                st.metric(label, f"{d['price']:.2f}",
+                          delta=f"{d['change_pct']:+.2f}%")
+
+        chart = create_futures_comparison_chart(group_data, group_name)
+        if chart:
+            st.plotly_chart(chart, use_container_width=True)
+        st.markdown("---")
+
+    st.subheader("📈 Futures Price Chart")
+    all_contracts_named = {c: futures_names.get(c, c) for c in all_contracts}
+    fut_sym = st.selectbox("Contract", list(all_contracts_named.keys()),
+                           format_func=lambda x: all_contracts_named[x])
+    fut_period = st.select_slider("Period", ['1mo', '3mo', '6mo', '1y'], value='3mo')
+    with st.spinner("Loading chart…"):
+        fut_chart = create_price_chart(fut_sym, all_contracts_named.get(fut_sym, fut_sym),
+                                       period=fut_period, interval='1d')
+    if fut_chart:
+        st.plotly_chart(fut_chart, use_container_width=True)
+
+# ─────────────────────────────────────────────────────────
+# OPTIONS FLOW
+# ─────────────────────────────────────────────────────────
+elif page == "Options Flow":
+    st.header("🎯 Options Flow & Analysis")
+
+    opt_col1, opt_col2 = st.columns([2, 1])
+    with opt_col1:
+        opt_symbol = st.text_input("Symbol", value="SPY").upper()
+    with opt_col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        load_opts = st.button("Load Options Data")
+
+    if opt_symbol:
+        with st.spinner(f"Fetching options data for {opt_symbol}…"):
+            opts_summary = data_fetcher.get_options_summary(opt_symbol)
+
+        if opts_summary:
+            st.subheader("📊 Options Summary")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("P/C Ratio (OI)",  str(opts_summary.get('pc_ratio_oi',  'N/A')))
+            m2.metric("P/C Ratio (Vol)", str(opts_summary.get('pc_ratio_vol', 'N/A')))
+            m3.metric("ATM IV", f"{opts_summary.get('atm_iv', 'N/A')}%"
+                      if opts_summary.get('atm_iv') else 'N/A')
+            m4.metric("Next Expiry", str(opts_summary.get('next_expiration', 'N/A')))
+
+            oi_col1, oi_col2 = st.columns(2)
+            with oi_col1:
+                st.metric("Total Call OI",  f"{opts_summary['total_call_oi']:,}")
+                st.metric("Total Call Vol", f"{opts_summary['total_call_vol']:,}")
+            with oi_col2:
+                st.metric("Total Put OI",   f"{opts_summary['total_put_oi']:,}")
+                st.metric("Total Put Vol",  f"{opts_summary['total_put_vol']:,}")
+
+            st.markdown("---")
+            st.subheader("📅 Available Expirations")
+            exps = opts_summary.get('expirations', [])
+            if exps:
+                selected_exp = st.selectbox("Expiration date", exps)
+                with st.spinner("Loading option chain…"):
+                    chain_data = data_fetcher.get_option_chain(opt_symbol, selected_exp)
+
+                if chain_data:
+                    chain_tab1, chain_tab2, chain_tab3 = st.tabs(["Open Interest", "IV Smile", "Chain Table"])
+
+                    with chain_tab1:
+                        oi_fig = create_options_oi_chart(chain_data)
+                        if oi_fig:
+                            st.plotly_chart(oi_fig, use_container_width=True)
+
+                    with chain_tab2:
+                        iv_fig = create_options_iv_smile(chain_data)
+                        if iv_fig:
+                            st.plotly_chart(iv_fig, use_container_width=True)
+
+                    with chain_tab3:
+                        chain_view = st.radio("Show", ["Calls", "Puts"], horizontal=True)
+                        df_chain = chain_data['calls'] if chain_view == "Calls" else chain_data['puts']
+                        cols_to_show = [c for c in [
+                            'strike', 'lastPrice', 'bid', 'ask', 'volume',
+                            'openInterest', 'impliedVolatility', 'delta', 'gamma', 'theta'
+                        ] if c in df_chain.columns]
+                        st.dataframe(df_chain[cols_to_show].sort_values('strike'),
+                                     use_container_width=True, hide_index=True)
+        else:
+            st.error(f"No options data available for {opt_symbol}")
+
+# ─────────────────────────────────────────────────────────
+# RISK ANALYSIS
+# ─────────────────────────────────────────────────────────
+elif page == "Risk Analysis":
+    st.header("⚠️ Risk Analysis & Management")
+
+    risk_col1, risk_col2, risk_col3 = st.columns([2, 2, 1])
+    with risk_col1:
+        risk_symbol = st.text_input("Symbol to analyse", value="SPY").upper()
+    with risk_col2:
+        risk_benchmark = st.selectbox("Benchmark", ['^GSPC', '^NDX', '^DJI', '^RUT'],
+                                      format_func=lambda x: {'^GSPC': 'S&P 500', '^NDX': 'NASDAQ-100',
+                                                              '^DJI': 'Dow Jones', '^RUT': 'Russell 2000'}.get(x, x))
+    with risk_col3:
+        risk_period = st.selectbox("Period", ['1y', '2y', '3y', '5y'], index=0)
+
+    with st.spinner(f"Calculating risk metrics for {risk_symbol}…"):
+        risk_data = data_fetcher.get_risk_metrics(risk_symbol, risk_benchmark, risk_period)
+
+    if risk_data:
+        st.subheader("📊 Key Risk Metrics")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Beta", f"{risk_data['beta']:.3f}",
+                  help="Sensitivity to benchmark movements. >1 = more volatile.")
+        c2.metric("Alpha (Ann.)", f"{risk_data['alpha']:.2f}%",
+                  help="Excess return vs benchmark after adjusting for risk.")
+        c3.metric("Sharpe Ratio", f"{risk_data['sharpe_ratio']:.3f}",
+                  help=">1 good, >2 very good, >3 excellent.")
+        c4.metric("Sortino Ratio", f"{risk_data['sortino_ratio']:.3f}",
+                  help="Like Sharpe but only penalises downside volatility.")
+
+        c5, c6, c7, c8 = st.columns(4)
+        c5.metric("Ann. Return", f"{risk_data['annual_return']:.2f}%")
+        c6.metric("Ann. Volatility", f"{risk_data['annual_volatility']:.2f}%")
+        c7.metric("Max Drawdown", f"{risk_data['max_drawdown']:.2f}%")
+        c8.metric("Calmar Ratio", f"{risk_data['calmar_ratio']:.3f}",
+                  help="Ann. return / Max drawdown. Higher = better risk-adjusted.")
+
+        st.subheader("📉 Value at Risk (VaR)")
+        v1, v2, v3 = st.columns(3)
+        v1.metric("1-Day VaR 95%", f"{risk_data['var_95']:.2f}%",
+                  help="On 95% of days, loss won't exceed this.")
+        v2.metric("1-Day VaR 99%", f"{risk_data['var_99']:.2f}%",
+                  help="On 99% of days, loss won't exceed this.")
+        v3.metric("CVaR 95% (ES)", f"{risk_data['cvar_95']:.2f}%",
+                  help="Expected loss on the worst 5% of days.")
+
+        st.metric("Correlation with Benchmark", f"{risk_data['correlation']:.3f}")
+
+        st.markdown("---")
+        risk_tab1, risk_tab2, risk_tab3 = st.tabs(["Risk Ratios", "Drawdown", "Rolling Volatility"])
+        with risk_tab1:
+            ratios_fig = create_risk_metrics_chart(risk_data)
+            if ratios_fig:
+                st.plotly_chart(ratios_fig, use_container_width=True)
+        with risk_tab2:
+            with st.spinner("Loading drawdown chart…"):
+                dd_fig = create_drawdown_chart(risk_symbol, risk_period)
+            if dd_fig:
+                st.plotly_chart(dd_fig, use_container_width=True)
+        with risk_tab3:
+            with st.spinner("Loading volatility chart…"):
+                vol_fig = create_rolling_volatility_chart(risk_symbol, risk_period)
+            if vol_fig:
+                st.plotly_chart(vol_fig, use_container_width=True)
+    else:
+        st.error(f"Could not calculate risk metrics for {risk_symbol}. Check the symbol and try again.")
+
+    st.markdown("---")
+    st.subheader("🔥 Multi-Asset Correlation")
+    default_corr = 'SPY, QQQ, GLD, TLT, USO, XLK, XLE, EURUSD=X'
+    corr_input = st.text_input("Comma-separated symbols", value=default_corr)
+    corr_period_sel = st.selectbox("Lookback period", ['1mo', '3mo', '6mo', '1y'], index=2)
+    if st.button("Generate Correlation Matrix"):
+        syms = [s.strip().upper() for s in corr_input.split(',') if s.strip()]
+        with st.spinner("Building correlation matrix…"):
+            corr_fig = create_correlation_heatmap(syms, period=corr_period_sel)
+        if corr_fig:
+            st.plotly_chart(corr_fig, use_container_width=True)
+        else:
+            st.error("Could not build correlation matrix. Check the symbols.")
+
+# ─────────────────────────────────────────────────────────
+# EARNINGS & EVENTS
+# ─────────────────────────────────────────────────────────
+elif page == "Earnings & Events":
+    st.header("📅 Earnings Calendar & Corporate Events")
+
+    earn_col1, earn_col2 = st.columns([3, 1])
+    with earn_col1:
+        earn_symbol = st.text_input("Ticker symbol", value="AAPL").upper()
+    with earn_col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    if earn_symbol:
+        with st.spinner(f"Fetching calendar data for {earn_symbol}…"):
+            cal_data = data_fetcher.get_earnings_calendar(earn_symbol)
+            div_data = data_fetcher.get_dividends_splits(earn_symbol)
+
+        if cal_data:
+            earn_tab1, earn_tab2, earn_tab3, earn_tab4 = st.tabs([
+                "Earnings Dates", "Analyst Recommendations", "Dividends & Splits", "Price Targets"
+            ])
+
+            with earn_tab1:
+                st.subheader(f"📆 Earnings Dates — {earn_symbol}")
+                if cal_data.get('calendar') is not None:
+                    cal = cal_data['calendar']
+                    try:
+                        st.json(cal)
+                    except Exception:
+                        st.write(cal)
+
+                ed = cal_data.get('earnings_dates')
+                if ed is not None and not ed.empty:
+                    st.subheader("Historical Earnings")
+                    st.dataframe(ed.head(20), use_container_width=True)
+                else:
+                    st.info("No upcoming earnings dates found")
+
+                eh = cal_data.get('earnings_history')
+                if eh is not None and not eh.empty:
+                    st.subheader("Earnings History (EPS)")
+                    st.dataframe(eh, use_container_width=True)
+
+            with earn_tab2:
+                recs = cal_data.get('recommendations')
+                if recs is not None and not recs.empty:
+                    st.subheader("Analyst Recommendations")
+                    st.dataframe(recs, use_container_width=True)
+                else:
+                    st.info("No analyst recommendations available")
+
+            with earn_tab3:
+                if div_data:
+                    d1, d2 = st.columns(2)
+                    with d1:
+                        st.metric("Dividend Yield",
+                                  f"{div_data['dividend_yield']*100:.2f}%"
+                                  if div_data.get('dividend_yield') else "N/A")
+                        st.metric("Payout Ratio",
+                                  f"{div_data['payout_ratio']*100:.1f}%"
+                                  if div_data.get('payout_ratio') else "N/A")
+                    with d2:
+                        st.metric("Annual Dividend",
+                                  f"${div_data['forward_annual_dividend']:.2f}"
+                                  if div_data.get('forward_annual_dividend') else "N/A")
+                        ex_div = div_data.get('ex_dividend_date')
+                        st.metric("Ex-Dividend Date",
+                                  datetime.fromtimestamp(ex_div).strftime('%Y-%m-%d')
+                                  if ex_div else "N/A")
+
+                    divs = div_data.get('dividends')
+                    if divs is not None and not divs.empty:
+                        st.subheader("Dividend History")
+                        div_df = divs.reset_index()
+                        div_df.columns = ['Date', 'Dividend ($)']
+                        st.dataframe(div_df, use_container_width=True, hide_index=True)
+
+                    splits = div_data.get('splits')
+                    if splits is not None and not splits.empty:
+                        st.subheader("Stock Split History")
+                        split_df = splits.reset_index()
+                        split_df.columns = ['Date', 'Split Ratio']
+                        st.dataframe(split_df, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No dividend data available")
+
+            with earn_tab4:
+                pt = cal_data.get('analyst_price_targets')
+                if pt is not None:
+                    try:
+                        st.subheader("Analyst Price Targets")
+                        if isinstance(pt, dict):
+                            targets_df = pd.DataFrame([pt])
+                        else:
+                            targets_df = pd.DataFrame(pt)
+                        st.dataframe(targets_df, use_container_width=True)
+                    except Exception:
+                        st.write(pt)
+                else:
+                    st.info("No price target data available")
+        else:
+            st.error(f"Could not fetch data for {earn_symbol}. Verify the ticker symbol.")
 
 elif page == "Portfolio":
     st.header("💼 Portfolio Management")
