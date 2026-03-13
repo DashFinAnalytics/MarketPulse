@@ -395,3 +395,112 @@ class DataFetcher:
         except Exception as e:
             logger.error(f"Error fetching dividend data for {symbol}: {str(e)}")
             return None
+
+    @st.cache_data(ttl=300)
+    def get_crypto_data(_self, symbols=None):
+        """Fetch cryptocurrency price data via yfinance."""
+        if symbols is None:
+            symbols = [
+                'BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD',
+                'ADA-USD', 'SOL-USD', 'DOGE-USD', 'MATIC-USD',
+                'DOT-USD', 'AVAX-USD', 'LINK-USD', 'UNI7083-USD'
+            ]
+        crypto_data = {}
+        for sym in symbols:
+            data = _self._fetch_ticker_data(sym)
+            if data:
+                crypto_data[sym] = data
+        return crypto_data
+
+    @st.cache_data(ttl=1800)
+    def get_economic_indicators(_self):
+        """
+        Fetch macro / economic proxy indicators available via yfinance.
+        Returns a list of dicts with label, symbol, price, change, change_pct, category.
+        """
+        indicators = [
+            # Dollar strength
+            {'symbol': 'DX-Y.NYB', 'label': 'US Dollar Index (DXY)', 'category': 'Currency'},
+            # Inflation proxies
+            {'symbol': 'TIP',  'label': 'TIPS ETF (Inflation)',        'category': 'Inflation'},
+            {'symbol': 'RINF', 'label': 'Inflation Expectations ETF',  'category': 'Inflation'},
+            # Credit / Spreads
+            {'symbol': 'HYG',  'label': 'High-Yield Bond ETF',         'category': 'Credit'},
+            {'symbol': 'LQD',  'label': 'Investment-Grade Bond ETF',   'category': 'Credit'},
+            {'symbol': 'JNK',  'label': 'Junk Bond ETF',               'category': 'Credit'},
+            # Rate-sensitive
+            {'symbol': 'TLT',  'label': '20Y+ Treasury ETF',           'category': 'Rates'},
+            {'symbol': 'SHY',  'label': '1-3Y Treasury ETF',           'category': 'Rates'},
+            {'symbol': 'BIL',  'label': '1-3M T-Bill ETF',             'category': 'Rates'},
+            # Economic cycle / Growth
+            {'symbol': 'XLY',  'label': 'Consumer Discretionary ETF',  'category': 'Cycle'},
+            {'symbol': 'XLP',  'label': 'Consumer Staples ETF',        'category': 'Cycle'},
+            {'symbol': 'XLI',  'label': 'Industrials ETF',             'category': 'Cycle'},
+            # Commodities
+            {'symbol': 'DJP',  'label': 'Bloomberg Commodity ETN',     'category': 'Commodities'},
+            {'symbol': 'PDBC', 'label': 'Diversified Commodity ETF',   'category': 'Commodities'},
+            # Global
+            {'symbol': 'EEM',  'label': 'Emerging Markets ETF',        'category': 'Global'},
+            {'symbol': 'VEA',  'label': 'Developed Markets ETF',       'category': 'Global'},
+        ]
+        results = []
+        for ind in indicators:
+            data = _self._fetch_ticker_data(ind['symbol'])
+            if data:
+                results.append({
+                    'symbol':     ind['symbol'],
+                    'label':      ind['label'],
+                    'category':   ind['category'],
+                    'price':      data['price'],
+                    'change':     data['change'],
+                    'change_pct': data['change_pct'],
+                })
+        return results
+
+    @st.cache_data(ttl=600)
+    def get_market_breadth(_self):
+        """
+        Calculate a market breadth score using sector ETF performance.
+        Score 0-100: higher = broader market participation.
+        """
+        sector_etfs = [
+            'XLK', 'XLV', 'XLE', 'XLF', 'XLI',
+            'XLU', 'XLB', 'XLRE', 'XLY', 'XLP', 'XLC'
+        ]
+        advancing = 0
+        declining = 0
+        changes = []
+        for sym in sector_etfs:
+            data = _self._fetch_ticker_data(sym)
+            if data:
+                changes.append({'symbol': sym, 'change_pct': data['change_pct']})
+                if data['change_pct'] >= 0:
+                    advancing += 1
+                else:
+                    declining += 1
+
+        total = advancing + declining
+        if total == 0:
+            return None
+
+        # Score: % of sectors advancing, scaled 0-100
+        score = (advancing / total) * 100
+
+        # Average change across sectors
+        avg_change = sum(c['change_pct'] for c in changes) / len(changes) if changes else 0
+
+        return {
+            'score': round(score, 1),
+            'advancing': advancing,
+            'declining': declining,
+            'total': total,
+            'avg_sector_change': round(avg_change, 2),
+            'sector_changes': changes,
+            'label': (
+                'Extreme Fear' if score < 20 else
+                'Fear'         if score < 40 else
+                'Neutral'      if score < 60 else
+                'Greed'        if score < 80 else
+                'Extreme Greed'
+            )
+        }

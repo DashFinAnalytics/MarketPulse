@@ -14,7 +14,10 @@ from utils.charts import (
     create_correlation_heatmap, create_volume_chart, create_risk_metrics_chart,
     create_drawdown_chart, create_rolling_volatility_chart,
     create_options_oi_chart, create_options_iv_smile,
-    create_forex_heatmap, create_futures_comparison_chart
+    create_forex_heatmap, create_futures_comparison_chart,
+    create_technical_analysis_chart, create_portfolio_allocation_chart,
+    create_portfolio_performance_chart, create_crypto_market_chart,
+    create_economic_dashboard_chart, create_market_breadth_chart
 )
 from utils.intervals import FinanceIntervals
 from utils.news_fetcher import news_fetcher
@@ -63,9 +66,10 @@ st.sidebar.header("Dashboard Controls")
 
 # Navigation
 page = st.sidebar.selectbox("Navigate", [
-    "Live Dashboard", "Historical Data", "Fundamental Analysis",
-    "Forex & Currencies", "Futures", "Options Flow",
-    "Risk Analysis", "Earnings & Events",
+    "Live Dashboard", "Historical Data", "Technical Analysis",
+    "Fundamental Analysis", "Forex & Currencies", "Futures",
+    "Options Flow", "Risk Analysis", "Earnings & Events",
+    "Crypto Markets", "Economic Indicators",
     "Market Alerts", "News", "Portfolio", "Database Stats"
 ])
 
@@ -437,6 +441,33 @@ if page == "Live Dashboard":
 
     st.markdown("---")
 
+    # Market Breadth
+    st.header("📡 Market Breadth & Sentiment")
+    breadth_col1, breadth_col2 = st.columns([1, 2])
+    with st.spinner("Calculating market breadth…"):
+        breadth = data_fetcher.get_market_breadth()
+    if breadth:
+        with breadth_col1:
+            st.metric("Advancing Sectors", breadth['advancing'])
+            st.metric("Declining Sectors",  breadth['declining'])
+            st.metric("Avg Sector Change", f"{breadth['avg_sector_change']:+.2f}%")
+            st.info(f"**Sentiment: {breadth['label']}**")
+        with breadth_col2:
+            brd_fig = create_market_breadth_chart(breadth)
+            if brd_fig:
+                st.plotly_chart(brd_fig, use_container_width=True)
+
+        brd_df = pd.DataFrame(breadth['sector_changes'])
+        brd_df['Direction'] = brd_df['change_pct'].apply(lambda x: '🟢' if x >= 0 else '🔴')
+        brd_df['change_pct'] = brd_df['change_pct'].apply(lambda x: f"{x:+.2f}%")
+        st.dataframe(brd_df[['symbol', 'Direction', 'change_pct']].rename(
+            columns={'symbol': 'Sector ETF', 'change_pct': '% Change'}
+        ), use_container_width=True, hide_index=True)
+    else:
+        st.info("Market breadth data loading…")
+
+    st.markdown("---")
+
     # Footer
     st.markdown("""
     <div style="text-align: center; color: #666; font-size: 0.8em; margin-top: 2em;">
@@ -452,8 +483,27 @@ elif page == "Historical Data":
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
         selected_symbol = st.selectbox(
-            "Select Symbol", 
-            ['SPY', 'QQQ', 'DIA', 'GLD', 'SLV', 'USO', 'UNG', '^VIX', 'XLK', 'XLV', 'XLE', 'XLF']
+            "Select Symbol",
+            [
+                # US Indices
+                'SPY', 'QQQ', 'DIA', 'IWM',
+                # Volatility
+                '^VIX',
+                # Sectors
+                'XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLU', 'XLB', 'XLRE', 'XLY', 'XLP', 'XLC',
+                # Commodities
+                'GLD', 'SLV', 'USO', 'UNG', 'PDBC',
+                # Bonds
+                'TLT', 'SHY', 'HYG', 'LQD',
+                # Crypto
+                'BTC-USD', 'ETH-USD', 'BNB-USD', 'SOL-USD', 'XRP-USD',
+                # Forex
+                'EURUSD=X', 'GBPUSD=X', 'USDJPY=X',
+                # Futures
+                'ES=F', 'NQ=F', 'GC=F', 'CL=F',
+                # Individual stocks
+                'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META', 'BRK-B'
+            ]
         )
     with col2:
         # Get available intervals
@@ -574,8 +624,16 @@ elif page == "Market Alerts":
         
         with col1:
             alert_symbol = st.selectbox(
-                "Symbol", 
-                ['SPY', 'QQQ', 'DIA', 'GLD', 'SLV', 'USO', 'UNG', '^VIX', 'XLK', 'XLV', 'XLE', 'XLF']
+                "Symbol",
+                [
+                    'SPY', 'QQQ', 'DIA', 'IWM', '^VIX',
+                    'GLD', 'SLV', 'USO', 'UNG', 'TLT', 'HYG',
+                    'XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLU', 'XLY', 'XLP',
+                    'BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD',
+                    'EURUSD=X', 'GBPUSD=X', 'USDJPY=X',
+                    'ES=F', 'NQ=F', 'GC=F', 'CL=F',
+                    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META'
+                ]
             )
         with col2:
             alert_type = st.selectbox("Alert Type", ["above", "below"])
@@ -609,7 +667,15 @@ elif page == "Market Alerts":
         with st.spinner("Checking alerts..."):
             # Get current prices for all symbols
             current_prices = {}
-            all_symbols = ['SPY', 'QQQ', 'DIA', 'GLD', 'SLV', 'USO', 'UNG', '^VIX', 'XLK', 'XLV', 'XLE', 'XLF']
+            all_symbols = [
+                'SPY', 'QQQ', 'DIA', 'IWM', '^VIX',
+                'GLD', 'SLV', 'USO', 'UNG', 'TLT', 'HYG',
+                'XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLU', 'XLY', 'XLP',
+                'BTC-USD', 'ETH-USD', 'SOL-USD',
+                'EURUSD=X', 'GBPUSD=X', 'USDJPY=X',
+                'ES=F', 'NQ=F', 'GC=F', 'CL=F',
+                'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META'
+            ]
             
             for symbol in all_symbols:
                 data = data_fetcher._fetch_ticker_data(symbol)
@@ -639,7 +705,14 @@ elif page == "News":
         if news_type == "Symbol News":
             news_symbol = st.selectbox(
                 "Symbol",
-                ['SPY', 'QQQ', 'DIA', 'GLD', 'SLV', 'USO', 'UNG', '^VIX', 'XLK', 'XLV', 'XLE', 'XLF']
+                [
+                    'SPY', 'QQQ', 'DIA', 'IWM', '^VIX',
+                    'GLD', 'SLV', 'USO', 'UNG', 'TLT', 'HYG',
+                    'XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLU', 'XLY', 'XLP',
+                    'BTC-USD', 'ETH-USD', 'SOL-USD',
+                    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META',
+                    'EURUSD=X', 'GC=F', 'CL=F'
+                ]
             )
             news_sector = None
             search_query = None
@@ -1102,6 +1175,255 @@ elif page == "Earnings & Events":
         else:
             st.error(f"Could not fetch data for {earn_symbol}. Verify the ticker symbol.")
 
+# ─────────────────────────────────────────────────────────
+# TECHNICAL ANALYSIS
+# ─────────────────────────────────────────────────────────
+elif page == "Technical Analysis":
+    st.header("📉 Technical Analysis")
+
+    ta_col1, ta_col2, ta_col3 = st.columns([2, 2, 1])
+    with ta_col1:
+        ta_symbol = st.text_input("Symbol", value="SPY").upper()
+    with ta_col2:
+        ta_period = st.selectbox("Period",
+                                  ['1mo', '3mo', '6mo', '1y', '2y', '5y'],
+                                  index=2)
+    with ta_col3:
+        ta_interval = st.selectbox("Interval",
+                                    ['1d', '1wk', '1h', '30m', '15m'],
+                                    index=0)
+
+    st.subheader("Indicator Settings")
+    ind_col1, ind_col2, ind_col3, ind_col4 = st.columns(4)
+    with ind_col1:
+        show_bb     = st.checkbox("Bollinger Bands", value=True)
+        show_volume = st.checkbox("Volume",          value=True)
+    with ind_col2:
+        show_rsi  = st.checkbox("RSI (14)",  value=True)
+        show_macd = st.checkbox("MACD",      value=True)
+    with ind_col3:
+        use_sma20  = st.checkbox("SMA 20",  value=True)
+        use_sma50  = st.checkbox("SMA 50",  value=True)
+    with ind_col4:
+        use_sma200 = st.checkbox("SMA 200", value=False)
+        use_ema20  = st.checkbox("EMA 20",  value=True)
+
+    sma_list = []
+    if use_sma20:  sma_list.append(20)
+    if use_sma50:  sma_list.append(50)
+    if use_sma200: sma_list.append(200)
+
+    if ta_symbol:
+        with st.spinner(f"Building technical chart for {ta_symbol}…"):
+            ta_fig = create_technical_analysis_chart(
+                ta_symbol, period=ta_period, interval=ta_interval,
+                show_bb=show_bb, show_rsi=show_rsi,
+                show_macd=show_macd, show_volume=show_volume,
+                sma_periods=sma_list if sma_list else [20]
+            )
+        if ta_fig:
+            st.plotly_chart(ta_fig, use_container_width=True)
+        else:
+            st.error(f"Could not build technical chart for {ta_symbol}. Check the symbol or try a longer period.")
+
+        st.markdown("---")
+        st.subheader("📐 Indicator Guide")
+        with st.expander("What do these indicators mean?"):
+            st.markdown("""
+| Indicator | What it shows |
+|---|---|
+| **SMA / EMA** | Moving average — trend direction; price above = bullish |
+| **Bollinger Bands** | Volatility bands; price near upper = overbought, near lower = oversold |
+| **RSI (14)** | Momentum oscillator 0–100; >70 overbought, <30 oversold |
+| **MACD** | Momentum; histogram above zero = bullish momentum, signal crossover = entry signal |
+| **Volume** | Confirms price moves; big move + high volume = stronger conviction |
+            """)
+
+# ─────────────────────────────────────────────────────────
+# CRYPTO MARKETS
+# ─────────────────────────────────────────────────────────
+elif page == "Crypto Markets":
+    st.header("🪙 Crypto Markets")
+    st.caption("Prices via Yahoo Finance")
+
+    crypto_symbols = {
+        'BTC-USD': 'Bitcoin',    'ETH-USD': 'Ethereum',   'BNB-USD': 'BNB',
+        'XRP-USD': 'XRP',        'ADA-USD': 'Cardano',     'SOL-USD': 'Solana',
+        'DOGE-USD': 'Dogecoin',  'DOT-USD': 'Polkadot',    'AVAX-USD': 'Avalanche',
+        'LINK-USD': 'Chainlink', 'MATIC-USD': 'Polygon',   'LTC-USD': 'Litecoin',
+        'XLM-USD': 'Stellar',    'ATOM-USD': 'Cosmos',     'UNI7083-USD': 'Uniswap'
+    }
+
+    with st.spinner("Loading crypto data…"):
+        crypto_data = data_fetcher.get_crypto_data(list(crypto_symbols.keys()))
+
+    if crypto_data:
+        # Top row metrics
+        top_coins = ['BTC-USD', 'ETH-USD', 'BNB-USD', 'SOL-USD', 'XRP-USD']
+        metric_cols = st.columns(len(top_coins))
+        for col, sym in zip(metric_cols, top_coins):
+            if sym in crypto_data:
+                d = crypto_data[sym]
+                with col:
+                    st.metric(
+                        crypto_symbols.get(sym, sym),
+                        f"${d['price']:,.2f}",
+                        delta=f"{d['change_pct']:+.2f}%"
+                    )
+
+        st.markdown("---")
+        # Performance chart
+        crypto_chart = create_crypto_market_chart(crypto_data)
+        if crypto_chart:
+            st.plotly_chart(crypto_chart, use_container_width=True)
+
+        # Table
+        st.subheader("📋 Full Market Table")
+        rows = []
+        for sym, label in crypto_symbols.items():
+            if sym in crypto_data:
+                d = crypto_data[sym]
+                rows.append({
+                    'Asset': label,
+                    'Symbol': sym.replace('-USD', ''),
+                    'Price ($)': f"${d['price']:,.4f}" if d['price'] < 1 else f"${d['price']:,.2f}",
+                    'Change ($)': f"{d['change']:+,.4f}" if abs(d['change']) < 1 else f"{d['change']:+,.2f}",
+                    'Change %': f"{d['change_pct']:+.2f}%",
+                    'Direction': '🟢' if d['change'] >= 0 else '🔴'
+                })
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.error("Failed to load crypto data")
+
+    st.markdown("---")
+    st.subheader("📈 Crypto Price Chart")
+    crypto_sym = st.selectbox("Select asset", list(crypto_symbols.keys()),
+                               format_func=lambda x: crypto_symbols.get(x, x))
+    crypto_period = st.select_slider("Period", ['7d', '1mo', '3mo', '6mo', '1y', '2y'], value='3mo')
+    with st.spinner("Loading chart…"):
+        c_chart = create_price_chart(crypto_sym, crypto_symbols.get(crypto_sym, crypto_sym),
+                                     period=crypto_period, interval='1d')
+    if c_chart:
+        st.plotly_chart(c_chart, use_container_width=True)
+
+    # Technical analysis on crypto
+    st.markdown("---")
+    st.subheader("🔬 Crypto Technical Analysis")
+    ta_crypto_sym = st.selectbox("Symbol for TA", list(crypto_symbols.keys()),
+                                  format_func=lambda x: crypto_symbols.get(x, x),
+                                  key='crypto_ta')
+    ta_crypto_period = st.select_slider("TA Period", ['1mo', '3mo', '6mo', '1y'], value='3mo',
+                                         key='crypto_ta_period')
+    with st.spinner("Building technical chart…"):
+        cta_fig = create_technical_analysis_chart(
+            ta_crypto_sym, period=ta_crypto_period, interval='1d',
+            show_bb=True, show_rsi=True, show_macd=True, show_volume=True
+        )
+    if cta_fig:
+        st.plotly_chart(cta_fig, use_container_width=True)
+
+# ─────────────────────────────────────────────────────────
+# ECONOMIC INDICATORS
+# ─────────────────────────────────────────────────────────
+elif page == "Economic Indicators":
+    st.header("🌐 Economic Indicators & Macro")
+    st.caption("Macro proxies sourced from ETF and index data via Yahoo Finance")
+
+    with st.spinner("Loading economic indicators…"):
+        eco_data = data_fetcher.get_economic_indicators()
+
+    if eco_data:
+        # Group by category
+        categories = {}
+        for ind in eco_data:
+            cat = ind.get('category', 'Other')
+            categories.setdefault(cat, []).append(ind)
+
+        # Summary bar chart
+        eco_chart = create_economic_dashboard_chart(eco_data)
+        if eco_chart:
+            st.plotly_chart(eco_chart, use_container_width=True)
+
+        st.markdown("---")
+
+        # Category sections
+        for cat_name, inds in categories.items():
+            st.subheader(f"🔹 {cat_name}")
+            eco_cols = st.columns(min(len(inds), 4))
+            for col, ind in zip(eco_cols, inds):
+                with col:
+                    delta_str = f"{ind['change_pct']:+.2f}%"
+                    st.metric(
+                        ind['label'],
+                        f"${ind['price']:.2f}",
+                        delta=delta_str
+                    )
+            # Full table for this category
+            cat_rows = [{
+                'Indicator': i['label'],
+                'Price': f"${i['price']:.2f}",
+                'Change %': f"{i['change_pct']:+.2f}%",
+                'Trend': '🟢 Up' if i['change'] >= 0 else '🔴 Down'
+            } for i in inds]
+            with st.expander(f"View {cat_name} details"):
+                st.dataframe(pd.DataFrame(cat_rows), use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+
+        # Key ratios / spreads
+        st.subheader("📐 Key Macro Ratios")
+        ratio_col1, ratio_col2, ratio_col3 = st.columns(3)
+
+        # Consumer confidence proxy: XLY / XLP ratio
+        xly = next((i for i in eco_data if i['symbol'] == 'XLY'), None)
+        xlp = next((i for i in eco_data if i['symbol'] == 'XLP'), None)
+        if xly and xlp and xlp['price'] > 0:
+            ratio = xly['price'] / xlp['price']
+            ratio_col1.metric(
+                "Risk Appetite (XLY/XLP)",
+                f"{ratio:.3f}",
+                help="Above 1 = consumers spending on discretionary (risk-on)"
+            )
+
+        # HYG / LQD spread proxy
+        hyg = next((i for i in eco_data if i['symbol'] == 'HYG'), None)
+        lqd = next((i for i in eco_data if i['symbol'] == 'LQD'), None)
+        if hyg and lqd and lqd['price'] > 0:
+            spread = hyg['price'] / lqd['price']
+            ratio_col2.metric(
+                "Credit Risk Proxy (HYG/LQD)",
+                f"{spread:.3f}",
+                help="Higher = credit spreads tightening (risk-on)"
+            )
+
+        # TLT/SHY (duration proxy)
+        tlt = next((i for i in eco_data if i['symbol'] == 'TLT'), None)
+        shy = next((i for i in eco_data if i['symbol'] == 'SHY'), None)
+        if tlt and shy and shy['price'] > 0:
+            dur_ratio = tlt['price'] / shy['price']
+            ratio_col3.metric(
+                "Duration Ratio (TLT/SHY)",
+                f"{dur_ratio:.3f}",
+                help="High = market expects lower long rates (risk-off)"
+            )
+
+        st.markdown("---")
+        st.subheader("📈 Indicator Price Chart")
+        eco_sym = st.selectbox("Select indicator",
+                                [i['symbol'] for i in eco_data],
+                                format_func=lambda x: next(
+                                    (i['label'] for i in eco_data if i['symbol'] == x), x))
+        eco_period = st.select_slider("Period",
+                                       ['1mo', '3mo', '6mo', '1y', '2y', '5y'],
+                                       value='1y')
+        with st.spinner("Loading chart…"):
+            eco_fig = create_price_chart(eco_sym, eco_sym, period=eco_period, interval='1d')
+        if eco_fig:
+            st.plotly_chart(eco_fig, use_container_width=True)
+    else:
+        st.error("Failed to load economic indicator data")
+
 elif page == "Portfolio":
     st.header("💼 Portfolio Management")
     
@@ -1187,6 +1509,22 @@ elif page == "Portfolio":
         with col4:
             st.metric("Cash Balance", f"${portfolio_info['cash_balance']:,.2f}")
         
+        # Portfolio Analytics Tabs
+        if portfolio_value['holdings']:
+            p_tab1, p_tab2, p_tab3 = st.tabs(["Holdings", "Allocation", "Performance"])
+            with p_tab1:
+                pass  # filled below
+            with p_tab2:
+                alloc_fig = create_portfolio_allocation_chart(portfolio_value['holdings'])
+                if alloc_fig:
+                    st.plotly_chart(alloc_fig, use_container_width=True)
+            with p_tab3:
+                perf_period = st.selectbox("Performance period", ['1mo', '3mo', '6mo', '1y'], index=1)
+                with st.spinner("Loading performance chart…"):
+                    perf_fig = create_portfolio_performance_chart(portfolio_value['holdings'], perf_period)
+                if perf_fig:
+                    st.plotly_chart(perf_fig, use_container_width=True)
+
         # Holdings table
         st.subheader("📈 Current Holdings")
         if portfolio_value['holdings']:
@@ -1213,11 +1551,15 @@ elif page == "Portfolio":
         with col1:
             st.subheader("📈 Buy Position")
             with st.form("buy_position"):
-                buy_symbol = st.selectbox(
-                    "Symbol",
-                    ['SPY', 'QQQ', 'DIA', 'GLD', 'SLV', 'USO', 'UNG', '^VIX', 'XLK', 'XLV', 'XLE', 'XLF'] +
-                    [h['symbol'] for h in holdings if h['symbol'] not in ['SPY', 'QQQ', 'DIA', 'GLD', 'SLV', 'USO', 'UNG', '^VIX', 'XLK', 'XLV', 'XLE', 'XLF']]
-                )
+                _default_syms = [
+                    'SPY', 'QQQ', 'DIA', 'IWM', 'GLD', 'SLV', 'USO', 'TLT', 'HYG',
+                    'XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLU', 'XLY', 'XLP',
+                    'BTC-USD', 'ETH-USD', 'SOL-USD',
+                    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META', 'BRK-B',
+                    'ES=F', 'NQ=F', 'GC=F', 'CL=F', 'EURUSD=X', 'GBPUSD=X'
+                ]
+                _extra = [h['symbol'] for h in holdings if h['symbol'] not in _default_syms]
+                buy_symbol = st.selectbox("Symbol", _default_syms + _extra)
                 buy_quantity = st.number_input("Quantity", min_value=0.1, value=1.0, step=0.1)
                 buy_price = st.number_input("Price per Share", min_value=0.01, value=100.0, step=0.01)
                 buy_notes = st.text_input("Notes (optional)")

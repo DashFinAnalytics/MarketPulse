@@ -429,3 +429,294 @@ def create_futures_comparison_chart(futures_data, group_label="Futures"):
     except Exception as e:
         logger.error(f"Error creating futures comparison chart: {str(e)}")
         return None
+
+
+def create_technical_analysis_chart(symbol, period="3mo", interval="1d",
+                                     show_bb=True, show_rsi=True, show_macd=True,
+                                     show_volume=True, sma_periods=None):
+    """
+    Multi-panel technical analysis chart with:
+    Price + Bollinger Bands + SMAs | Volume | RSI | MACD
+    """
+    try:
+        from plotly.subplots import make_subplots
+
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period=period, interval=interval)
+        if hist.empty or len(hist) < 20:
+            return None
+
+        close = hist['Close']
+        high  = hist['High']
+        low   = hist['Low']
+        vol   = hist['Volume']
+
+        # ── Indicators ─────────────────────────────────────
+        if sma_periods is None:
+            sma_periods = [20, 50, 200]
+        smas = {p: close.rolling(p).mean() for p in sma_periods if len(close) >= p}
+        ema20 = close.ewm(span=20, adjust=False).mean()
+
+        # Bollinger Bands (20-period, 2σ)
+        sma20 = close.rolling(20).mean()
+        std20 = close.rolling(20).std()
+        bb_upper = sma20 + 2 * std20
+        bb_lower = sma20 - 2 * std20
+
+        # RSI (14)
+        delta = close.diff()
+        gain  = delta.clip(lower=0)
+        loss  = (-delta).clip(lower=0)
+        avg_gain = gain.ewm(com=13, adjust=False).mean()
+        avg_loss = loss.ewm(com=13, adjust=False).mean()
+        rs  = avg_gain / avg_loss.replace(0, float('nan'))
+        rsi = 100 - (100 / (1 + rs))
+
+        # MACD (12, 26, 9)
+        ema12    = close.ewm(span=12, adjust=False).mean()
+        ema26    = close.ewm(span=26, adjust=False).mean()
+        macd     = ema12 - ema26
+        signal   = macd.ewm(span=9, adjust=False).mean()
+        macd_hist= macd - signal
+
+        # ── Subplot layout ─────────────────────────────────
+        rows, heights = 1, [0.5]
+        if show_volume: rows += 1; heights.append(0.1)
+        if show_rsi:    rows += 1; heights.append(0.15)
+        if show_macd:   rows += 1; heights.append(0.2)
+
+        specs = [[{"secondary_y": False}]] * rows
+        row_titles = ['']
+        if show_volume: row_titles.append('Volume')
+        if show_rsi:    row_titles.append('RSI')
+        if show_macd:   row_titles.append('MACD')
+
+        fig = make_subplots(rows=rows, cols=1, shared_xaxes=True,
+                            vertical_spacing=0.03, row_heights=heights)
+
+        # ── Price + Candlestick ─────────────────────────────
+        fig.add_trace(go.Candlestick(
+            x=hist.index, open=hist['Open'], high=high,
+            low=low, close=close, name='Price',
+            increasing_line_color='green', decreasing_line_color='red'
+        ), row=1, col=1)
+
+        # SMAs
+        colours = ['orange', 'blue', 'purple', 'brown']
+        for i, (p, sma_val) in enumerate(smas.items()):
+            fig.add_trace(go.Scatter(x=hist.index, y=sma_val,
+                                     mode='lines', name=f'SMA{p}',
+                                     line=dict(color=colours[i % len(colours)], width=1.2),
+                                     opacity=0.8), row=1, col=1)
+
+        fig.add_trace(go.Scatter(x=hist.index, y=ema20,
+                                  mode='lines', name='EMA20',
+                                  line=dict(color='cyan', width=1.2, dash='dot'),
+                                  opacity=0.8), row=1, col=1)
+
+        # Bollinger Bands
+        if show_bb:
+            fig.add_trace(go.Scatter(x=hist.index, y=bb_upper,
+                                      mode='lines', name='BB Upper',
+                                      line=dict(color='gray', width=1, dash='dash'),
+                                      showlegend=False), row=1, col=1)
+            fig.add_trace(go.Scatter(x=hist.index, y=bb_lower,
+                                      mode='lines', name='BB Lower',
+                                      line=dict(color='gray', width=1, dash='dash'),
+                                      fill='tonexty',
+                                      fillcolor='rgba(128,128,128,0.08)',
+                                      showlegend=False), row=1, col=1)
+
+        cur_row = 2
+
+        # ── Volume ─────────────────────────────────────────
+        if show_volume:
+            vol_colors = ['green' if c >= o else 'red'
+                          for c, o in zip(hist['Close'], hist['Open'])]
+            fig.add_trace(go.Bar(x=hist.index, y=vol,
+                                  name='Volume', marker_color=vol_colors,
+                                  opacity=0.6, showlegend=False),
+                           row=cur_row, col=1)
+            fig.update_yaxes(title_text="Vol", row=cur_row, col=1)
+            cur_row += 1
+
+        # ── RSI ────────────────────────────────────────────
+        if show_rsi:
+            rsi_colors = [
+                'green' if v < 30 else ('red' if v > 70 else 'royalblue')
+                for v in rsi.fillna(50)
+            ]
+            fig.add_trace(go.Scatter(x=hist.index, y=rsi,
+                                      mode='lines', name='RSI(14)',
+                                      line=dict(color='royalblue', width=1.5)),
+                           row=cur_row, col=1)
+            fig.add_hline(y=70, line_dash="dash", line_color="red",   opacity=0.5, row=cur_row, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.5, row=cur_row, col=1)
+            fig.add_hline(y=50, line_dash="dot",  line_color="gray",  opacity=0.3, row=cur_row, col=1)
+            fig.update_yaxes(title_text="RSI", range=[0, 100], row=cur_row, col=1)
+            cur_row += 1
+
+        # ── MACD ───────────────────────────────────────────
+        if show_macd:
+            hist_colors = ['green' if v >= 0 else 'red' for v in macd_hist.fillna(0)]
+            fig.add_trace(go.Bar(x=hist.index, y=macd_hist,
+                                  name='MACD Hist', marker_color=hist_colors,
+                                  opacity=0.6, showlegend=False),
+                           row=cur_row, col=1)
+            fig.add_trace(go.Scatter(x=hist.index, y=macd,
+                                      mode='lines', name='MACD',
+                                      line=dict(color='blue', width=1.5)),
+                           row=cur_row, col=1)
+            fig.add_trace(go.Scatter(x=hist.index, y=signal,
+                                      mode='lines', name='Signal',
+                                      line=dict(color='orange', width=1.5)),
+                           row=cur_row, col=1)
+            fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5,
+                          row=cur_row, col=1)
+            fig.update_yaxes(title_text="MACD", row=cur_row, col=1)
+
+        fig.update_layout(
+            title=f"{symbol} — Technical Analysis ({period})",
+            template="plotly_white", height=700,
+            xaxis_rangeslider_visible=False,
+            legend=dict(orientation="h", y=1.02, x=0)
+        )
+        return fig
+
+    except Exception as e:
+        logger.error(f"Error creating technical analysis chart for {symbol}: {str(e)}")
+        return None
+
+
+def create_portfolio_allocation_chart(holdings_data):
+    """Pie chart of portfolio allocation by market value."""
+    try:
+        if not holdings_data:
+            return None
+        symbols = [h['symbol'] for h in holdings_data if h.get('market_value', 0) > 0]
+        values  = [h['market_value'] for h in holdings_data if h.get('market_value', 0) > 0]
+        if not symbols:
+            return None
+        fig = go.Figure(go.Pie(
+            labels=symbols, values=values,
+            hole=0.4, textinfo='label+percent',
+            hovertemplate='%{label}<br>$%{value:,.2f}<br>%{percent}<extra></extra>'
+        ))
+        fig.update_layout(title="Portfolio Allocation", height=400,
+                          template="plotly_white")
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating portfolio allocation chart: {str(e)}")
+        return None
+
+
+def create_portfolio_performance_chart(holdings_data, period="3mo"):
+    """Normalised price performance of all portfolio holdings."""
+    try:
+        if not holdings_data:
+            return None
+        symbols = list(set(h['symbol'] for h in holdings_data))
+        fig = go.Figure()
+        for sym in symbols:
+            try:
+                t = yf.Ticker(sym)
+                h = t.history(period=period)
+                if h.empty:
+                    continue
+                norm = h['Close'] / h['Close'].iloc[0] * 100
+                fig.add_trace(go.Scatter(x=h.index, y=norm,
+                                          mode='lines', name=sym))
+            except Exception:
+                continue
+        fig.add_hline(y=100, line_dash="dash", line_color="gray", opacity=0.5)
+        fig.update_layout(title=f"Holding Performance (normalised, {period})",
+                          yaxis_title="Indexed (base=100)",
+                          template="plotly_white", height=400)
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating portfolio performance chart: {str(e)}")
+        return None
+
+
+def create_crypto_market_chart(crypto_data):
+    """Bar chart of % change for crypto assets."""
+    try:
+        if not crypto_data:
+            return None
+        labels  = list(crypto_data.keys())
+        changes = [crypto_data[s]['change_pct'] for s in labels]
+        clean   = [l.replace('-USD', '') for l in labels]
+        fig = go.Figure(go.Bar(
+            x=clean, y=changes,
+            marker_color=['green' if c >= 0 else 'red' for c in changes],
+            text=[f"{c:+.2f}%" for c in changes],
+            textposition='auto'
+        ))
+        fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+        fig.update_layout(title="Crypto 24h Performance",
+                          xaxis_title="Asset", yaxis_title="% Change",
+                          template="plotly_white", height=380, showlegend=False)
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating crypto market chart: {str(e)}")
+        return None
+
+
+def create_economic_dashboard_chart(eco_data):
+    """Horizontal bar chart for economic indicator snapshot."""
+    try:
+        if not eco_data:
+            return None
+        labels  = [d['label']  for d in eco_data if d.get('change_pct') is not None]
+        changes = [d['change_pct'] for d in eco_data if d.get('change_pct') is not None]
+        if not labels:
+            return None
+        colors = ['green' if c >= 0 else 'red' for c in changes]
+        fig = go.Figure(go.Bar(
+            x=changes, y=labels, orientation='h',
+            marker_color=colors,
+            text=[f"{c:+.2f}%" for c in changes],
+            textposition='auto'
+        ))
+        fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
+        fig.update_layout(title="Economic Indicators — 1-Day % Change",
+                          xaxis_title="% Change", template="plotly_white",
+                          height=420, showlegend=False)
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating economic dashboard chart: {str(e)}")
+        return None
+
+
+def create_market_breadth_chart(breadth_data):
+    """Gauge-style chart showing market breadth."""
+    try:
+        if not breadth_data:
+            return None
+        score = breadth_data.get('score', 50)
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=score,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "Market Breadth Score"},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "darkblue"},
+                'steps': [
+                    {'range': [0, 30],  'color': "red"},
+                    {'range': [30, 45], 'color': "orange"},
+                    {'range': [45, 55], 'color': "yellow"},
+                    {'range': [55, 70], 'color': "lightgreen"},
+                    {'range': [70, 100],'color': "green"}
+                ],
+                'threshold': {
+                    'line': {'color': "black", 'width': 3},
+                    'thickness': 0.8, 'value': score
+                }
+            }
+        ))
+        fig.update_layout(height=280, template="plotly_white")
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating market breadth chart: {str(e)}")
+        return None
