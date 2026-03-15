@@ -56,4 +56,4 @@ backend/
 When running locally, interactive API docs are available at:
 
 - Swagger UI: <http://localhost:8000/docs>
-- Redoc: http://localhost:8000/redoc
+- Redoc: <http://localhost:8000/redoc>
