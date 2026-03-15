@@ -76,7 +76,7 @@ This will start:
 | Service | URL |
 |---|---|
 | Frontend | <http://localhost:3000> |
-| Backend API | http://localhost:8000 |
+| Backend API | <http://localhost:8000> |
 | API docs (Swagger) | <http://localhost:8000/docs> |
 | API docs (Redoc) | <http://localhost:8000/redoc> |
 
