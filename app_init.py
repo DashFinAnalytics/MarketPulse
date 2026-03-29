@@ -112,9 +112,9 @@ class AppInitializer:
         health_status: Dict[str, Any] = {}
 
         try:
-            cache.set("health_check", "ok", 10)
-            health_status["cache"] = cache.get("health_check") == "ok"
-            cache.delete("health_check")
+            cache.set("__app_init_health_check__", "ok", 10)
+            health_status["cache"] = cache.get("__app_init_health_check__") == "ok"
+            cache.delete("__app_init_health_check__")
         except Exception as exc:
             logger.warning("Cache health check failed", error=str(exc))
             health_status["cache"] = False
