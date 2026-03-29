@@ -31,7 +31,7 @@ class MemoryCache:
             entry = self._cache.get(key)
             if entry is None:
                 return None
-            if time.time() > entry["expires_at"]:
+            if time.monotonic() > entry["expires_at"]:
                 del self._cache[key]
                 return None
             return entry["value"]
@@ -41,7 +41,7 @@ class MemoryCache:
         with self._lock:
             self._cache[key] = {
                 "value": value,
-                "expires_at": time.time() + expires_in,
+                "expires_at": time.monotonic() + expires_in,
                 "created_at": time.time(),
             }
 
@@ -58,7 +58,7 @@ class MemoryCache:
 
     def cleanup_expired(self) -> int:
         with self._lock:
-            now = time.time()
+            now = time.monotonic()
             expired = [key for key, value in self._cache.items() if now > value["expires_at"]]
             for key in expired:
                 del self._cache[key]
@@ -66,7 +66,7 @@ class MemoryCache:
 
     def stats(self) -> Dict[str, int]:
         with self._lock:
-            now = time.time()
+            now = time.monotonic()
             active_entries = sum(1 for value in self._cache.values() if now <= value["expires_at"])
             return {
                 "total_entries": len(self._cache),
