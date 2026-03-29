@@ -81,7 +81,7 @@ class DataFetcher:
             logger.warning("Symbol validation failed", symbol=symbol, error=str(exc))
             return None
 
-        for attempt in range(_self.retry_attempts):
+        for attempt in range(max(1, self.retry_attempts)):
             try:
                 ticker = yf.Ticker(symbol)
                 history = ticker.history(period="2d")
@@ -265,7 +265,7 @@ class DataFetcher:
             logger.warning("Invalid options symbol", symbol=symbol, error=str(exc))
             return None
 
-        for attempt in range(_self.retry_attempts):
+        for attempt in range(max(1, self.retry_attempts)):
             try:
                 ticker = yf.Ticker(symbol)
                 expirations = ticker.options
@@ -338,7 +338,7 @@ class DataFetcher:
             logger.warning("Invalid option chain symbol", symbol=symbol, error=str(exc))
             return None
 
-        for attempt in range(_self.retry_attempts):
+        for attempt in range(max(1, self.retry_attempts)):
             try:
                 ticker = yf.Ticker(symbol)
                 if not expiration:
