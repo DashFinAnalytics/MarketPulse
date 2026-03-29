@@ -110,7 +110,7 @@ MarketPulse is built as a set of independently deployable services with a clear 
 | Primary Database | PostgreSQL 16+ | Relational data, user/portfolio records |
 | Time-Series Database | TimescaleDB | Price history, market data |
 | Cache | Redis 7+ | API response caching, pub/sub for live updates |
-| Worker Queue | ARQ / Celery | Background jobs and scheduled tasks |
+| Worker Queue | ARQ (primary; Celery as alternative) | Background jobs and scheduled tasks |
 | AI Services | Python (isolated) | NLP model serving |
 | Observability | Structured JSON logging + monitoring | TBD: Prometheus/Grafana or hosted solution |
 | Auth | JWT + refresh tokens | MFA via TOTP |
