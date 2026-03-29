@@ -18,8 +18,6 @@ logger = get_logger(__name__)
 
 class DataFetcher:
     def __init__(self) -> None:
-        self.cache_duration = config.cache.market_data_ttl
-        self.timeout = config.api.yfinance_timeout
         self.retry_attempts = config.api.yfinance_retry_attempts
 
     def _validate_symbol(self, symbol: str) -> str:
