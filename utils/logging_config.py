@@ -60,16 +60,16 @@ def log_execution_time(logger: Optional[StructuredLogger] = None) -> Callable:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             func_logger = logger or get_logger(func.__module__)
-            start = time.time()
+            start = time.perf_counter()
             try:
                 result = func(*args, **kwargs)
-                func_logger.debug(func.__name__, execution_time=f"{time.time() - start:.3f}s")
+                func_logger.debug(func.__name__, execution_time=f"{time.perf_counter() - start:.3f}s")
                 return result
             except Exception as exc:
                 func_logger.error(
                     f"{func.__name__} failed",
                     error=str(exc),
-                    execution_time=f"{time.time() - start:.3f}s",
+                    execution_time=f"{time.perf_counter() - start:.3f}s",
                 )
                 raise
 
