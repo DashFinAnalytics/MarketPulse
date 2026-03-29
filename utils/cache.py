@@ -59,7 +59,11 @@ class MemoryCache:
     def cleanup_expired(self) -> int:
         with self._lock:
             now = time.monotonic()
-            expired = [key for key, value in self._cache.items() if now > value["expires_at"]]
+            expired = [
+                key 
+                for key, value in self._cache.items()
+                if now > value["expires_at"]
+            ]
             for key in expired:
                 del self._cache[key]
             return len(expired)
