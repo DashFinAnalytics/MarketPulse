@@ -117,9 +117,6 @@ Once the backend structure is stable, this section will be updated with concrete
 
 ## Running Tests
 
-
-## Running Tests
-
 ### Frontend
 
 ```bash
