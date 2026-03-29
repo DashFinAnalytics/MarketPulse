@@ -24,8 +24,16 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 _ENV_PATH = Path(__file__).parent / ".env"
-if load_dotenv and _ENV_PATH.exists():
-    load_dotenv(_ENV_PATH)
+if _ENV_PATH.exists():
+    if load_dotenv is not None:
+        load_dotenv(_ENV_PATH)
+    else:
+        warnings.warn(
+            f"Config: .env file found at {_ENV_PATH} but python-dotenv is not installed; "
+            "environment variables from this file will be ignored.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
 
 
 def _env_bool(name: str, default: bool) -> bool:
