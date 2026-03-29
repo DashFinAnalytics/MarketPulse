@@ -133,7 +133,11 @@ class CacheConfig:
 
 @dataclass
 class AppConfig:
-    environment: str = field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
+    # ENVIRONMENT is checked first for compatibility; APP_ENV is the documented name in .env.example.
+    environment: str = field(
+        default_factory=lambda: os.getenv("ENVIRONMENT")
+        or os.getenv("APP_ENV", "development")
+    )
     debug: bool = field(default_factory=lambda: _env_bool("DEBUG", False))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
     title: str = field(default_factory=lambda: os.getenv("APP_TITLE", "MarketPulse"))
