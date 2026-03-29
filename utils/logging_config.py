@@ -130,13 +130,22 @@ def setup_logging() -> None:
             # Not all handlers implement flush(), so guard with hasattr.
             if hasattr(handler, "flush"):
                 handler.flush()  # type: ignore[call-arg]
-        except Exception:
-            # Swallow errors during cleanup to avoid breaking logging setup.
-            pass
+        except Exception as exc:
+            # Swallow errors during cleanup to avoid breaking logging setup,
+            # but emit a best-effort diagnostic so issues are still observable.
+            print(
+                f"Warning: failed to flush logging handler {handler!r}: {exc}",
+                file=sys.stderr,
+            )
         try:
             handler.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            # As above, do not let handler-close failures break logging setup,
+            # but surface them on stderr for debugging.
+            print(
+                f"Warning: failed to close logging handler {handler!r}: {exc}",
+                file=sys.stderr,
+            )
     root_logger.handlers.clear()
     root_logger.setLevel(getattr(logging, config.app.log_level.upper(), logging.INFO))
 
