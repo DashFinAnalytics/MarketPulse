@@ -78,7 +78,7 @@ The platform is organized into major functional domains. See [docs/roadmap.md](d
 | Backend API | Python (FastAPI) |
 | Database | PostgreSQL + TimescaleDB |
 | Cache | Redis |
-| Worker Queue | Background job system (e.g., Celery / ARQ) |
+| Worker Queue | ARQ (per ADR-0001) |
 | AI Services | Isolated service layer |
 | Observability | Structured logging + monitoring |
 
