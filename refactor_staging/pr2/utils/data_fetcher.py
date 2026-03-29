@@ -123,12 +123,17 @@ class DataFetcher:
     def _collect_asset_data(self, symbols: Sequence[str], data_type: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
         collected: Dict[str, Dict[str, Any]] = {}
         for raw_symbol in symbols:
-            data = self._fetch_ticker_data(raw_symbol)
+            try:
+                symbol = self._validate_symbol(raw_symbol)
+            except ValidationError as exc:
+                logger.warning("Symbol validation failed in _collect_asset_data", symbol=raw_symbol, error=str(exc))
+                continue
+            data = self._fetch_ticker_data(symbol)
             if not data:
                 continue
-            collected[raw_symbol] = data
+            collected[symbol] = data
             if data_type:
-                self._store_data_if_possible(raw_symbol, data, data_type)
+                self._store_data_if_possible(symbol, data, data_type)
         return collected
 
     @log_execution_time()
