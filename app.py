@@ -17,10 +17,19 @@ from utils.charts import (
     create_forex_heatmap, create_futures_comparison_chart,
     create_technical_analysis_chart, create_portfolio_allocation_chart,
     create_portfolio_performance_chart, create_crypto_market_chart,
-    create_economic_dashboard_chart, create_market_breadth_chart
+    create_economic_dashboard_chart, create_market_breadth_chart,
+    create_equity_curve_chart, create_trade_distribution_chart,
+    create_monte_carlo_chart, create_trend_signal_heatmap,
+    create_portfolio_optimization_chart, create_efficient_frontier_chart
 )
 from utils.intervals import FinanceIntervals
 from utils.news_fetcher import news_fetcher
+from utils.market_status import get_market_status, get_major_market_hours
+from utils.trend_signals import compute_trend_signal, batch_trend_signals, TIMEFRAME_DAYS
+from utils.sec_fetcher import search_filings, get_company_filings, get_insider_transactions
+from utils.backtester import (run_sma_crossover, run_rsi_strategy,
+                               run_bollinger_band_strategy, run_buy_and_hold,
+                               run_monte_carlo)
 from database import db_manager
 import json
 
@@ -70,6 +79,7 @@ page = st.sidebar.selectbox("Navigate", [
     "Fundamental Analysis", "Forex & Currencies", "Futures",
     "Options Flow", "Risk Analysis", "Earnings & Events",
     "Crypto Markets", "Economic Indicators",
+    "Trend Signals", "SEC & Insider Activity", "Backtesting",
     "Market Alerts", "News", "Portfolio", "Database Stats"
 ])
 
@@ -92,13 +102,88 @@ if refresh_button:
     st.rerun()
 
 if page == "Live Dashboard":
-    # Create columns for layout
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # ── Market status banner ─────────────────────────────────────────────
+    try:
+        ms = get_market_status()
+        st.markdown(
+            f"<div style='background:{ms['color']}22; border-left:4px solid {ms['color']}; "
+            f"padding:8px 16px; border-radius:4px; margin-bottom:8px;'>"
+            f"<b style='color:{ms['color']};'>{ms['label']}</b> &nbsp;|&nbsp; "
+            f"NYSE &nbsp;|&nbsp; {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}</div>",
+            unsafe_allow_html=True
+        )
+    except Exception:
+        pass
 
-    # Display last updated time
-    with col3:
-        st.markdown(f"**Last Updated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    # ── Scrolling live ticker ────────────────────────────────────────────
+    try:
+        tick_syms = ['SPY','QQQ','DIA','BTC-USD','ETH-USD','GC=F','CL=F','EURUSD=X','GBPUSD=X','^VIX']
+        tick_data = data_fetcher.get_indices_data(tick_syms)
+        if tick_data:
+            parts = []
+            for sym, d in tick_data.items():
+                arrow = "▲" if d['change_pct'] >= 0 else "▼"
+                color = "#00cc66" if d['change_pct'] >= 0 else "#ff4444"
+                parts.append(
+                    f"<span style='color:{color};margin:0 20px;'>"
+                    f"<b>{sym}</b>&nbsp;{d['price']:.2f}&nbsp;{arrow}{abs(d['change_pct']):.2f}%</span>"
+                )
+            ticker_html = "".join(parts) * 3
+            st.markdown(
+                f"<div style='overflow:hidden;white-space:nowrap;background:#0e1117;"
+                f"padding:6px 0;border-radius:4px;border:1px solid #333;margin-bottom:12px;'>"
+                f"<span style='display:inline-block;animation:marquee 40s linear infinite;font-family:monospace;font-size:13px;'>"
+                f"{ticker_html}</span></div>"
+                f"<style>@keyframes marquee{{from{{transform:translateX(100%)}}to{{transform:translateX(-100%)}}}}</style>",
+                unsafe_allow_html=True
+            )
+    except Exception:
+        pass
 
+    # ── Global market hours ──────────────────────────────────────────────
+    try:
+        mh = get_major_market_hours()
+        if mh:
+            cols_mh = st.columns(len(mh))
+            for i, m in enumerate(mh):
+                cols_mh[i].markdown(
+                    f"<div style='text-align:center;background:{m['color']}22;"
+                    f"border:1px solid {m['color']};border-radius:6px;padding:6px 4px;'>"
+                    f"<b style='font-size:11px;'>{m['market']}</b><br>"
+                    f"<span style='color:{m['color']};font-weight:bold;'>{m['status']}</span><br>"
+                    f"<span style='font-size:11px;color:#aaa;'>{m['local_time']}</span></div>",
+                    unsafe_allow_html=True
+                )
+        st.markdown("")
+    except Exception:
+        pass
+
+    # ── Top Gainers / Losers ─────────────────────────────────────────────
+    try:
+        movers = data_fetcher.get_top_movers_broad(limit=5)
+        if movers and (movers.get('gainers') or movers.get('losers')):
+            with st.expander("🚀 Top Movers (Broad Market)", expanded=True):
+                gm_col, lm_col = st.columns(2)
+                with gm_col:
+                    st.markdown("**Top Gainers**")
+                    for g in movers.get('gainers', []):
+                        st.markdown(
+                            f"🟢 **{g['symbol']}** — ${g['price']:.2f} "
+                            f"<span style='color:green'>+{g['change_pct']:.2f}%</span>",
+                            unsafe_allow_html=True
+                        )
+                with lm_col:
+                    st.markdown("**Top Losers**")
+                    for lo in movers.get('losers', []):
+                        st.markdown(
+                            f"🔴 **{lo['symbol']}** — ${lo['price']:.2f} "
+                            f"<span style='color:red'>{lo['change_pct']:.2f}%</span>",
+                            unsafe_allow_html=True
+                        )
+    except Exception:
+        pass
+
+    st.markdown(f"*Data as of {datetime.now().strftime('%H:%M:%S UTC')} — refreshed every 5 min*")
     # Global Stock Indices Section
     st.header("📊 Global Stock Indices")
     indices_col1, indices_col2 = st.columns(2)
@@ -750,23 +835,66 @@ elif page == "News":
                     articles = []
                 
                 if articles:
+                    # ── Sentiment scoring with TextBlob ────────────────
+                    try:
+                        from textblob import TextBlob as _TB
+                        for a in articles:
+                            txt   = f"{a.get('title','')} {a.get('summary','')}"
+                            pol   = _TB(txt).sentiment.polarity
+                            a['sentiment_score']  = round(pol, 3)
+                            a['sentiment_label']  = ('🟢 Bullish' if pol > 0.05 else
+                                                     '🔴 Bearish' if pol < -0.05 else '⚪ Neutral')
+                        has_sentiment = True
+                    except Exception:
+                        has_sentiment = False
+
+                    # ── Aggregate sentiment summary ───────────────────
+                    if has_sentiment:
+                        scores = [a['sentiment_score'] for a in articles]
+                        avg_s  = sum(scores) / len(scores) if scores else 0
+                        bull_c = sum(1 for s in scores if s > 0.05)
+                        bear_c = sum(1 for s in scores if s < -0.05)
+                        neu_c  = len(scores) - bull_c - bear_c
+                        sa1, sa2, sa3, sa4 = st.columns(4)
+                        sa1.metric("Avg Sentiment", f"{avg_s:+.3f}")
+                        sa2.metric("🟢 Bullish Articles", bull_c)
+                        sa3.metric("🔴 Bearish Articles", bear_c)
+                        sa4.metric("⚪ Neutral Articles", neu_c)
+
                     st.success(f"Found {len(articles)} articles")
-                    
-                    # Display articles
+
+                    # ── Sentiment filter ──────────────────────────────
+                    if has_sentiment:
+                        sent_filter = st.selectbox("Filter by Sentiment",
+                                                   ["All","🟢 Bullish","🔴 Bearish","⚪ Neutral"],
+                                                   key="sent_filter")
+                        if sent_filter != "All":
+                            articles = [a for a in articles
+                                        if a.get('sentiment_label') == sent_filter]
+
+                    # ── Display articles ──────────────────────────────
                     for i, article in enumerate(articles):
-                        with st.expander(f"{article['title'][:80]}..." if len(article['title']) > 80 else article['title']):
+                        sent_badge = f" — {article['sentiment_label']}" if has_sentiment else ""
+                        title_str  = article['title']
+                        label      = f"{title_str[:70]}…{sent_badge}" if len(title_str) > 70 else f"{title_str}{sent_badge}"
+                        with st.expander(label):
                             col1, col2 = st.columns([3, 1])
-                            
                             with col1:
                                 st.markdown(f"**Source:** {article['source']}")
                                 st.markdown(f"**Published:** {article['published'].strftime('%Y-%m-%d %H:%M')}")
                                 if article.get('author'):
                                     st.markdown(f"**Author:** {article['author']}")
-                            
+                                if has_sentiment:
+                                    sc = article['sentiment_score']
+                                    color = "green" if sc > 0.05 else ("red" if sc < -0.05 else "gray")
+                                    st.markdown(
+                                        f"<b>Sentiment:</b> <span style='color:{color}'>"
+                                        f"{article['sentiment_label']} ({sc:+.3f})</span>",
+                                        unsafe_allow_html=True
+                                    )
                             with col2:
                                 if st.button("Read More", key=f"read_{i}"):
                                     st.markdown(f"[Open Article]({article['link']})")
-                            
                             st.markdown("**Summary:**")
                             st.write(article['summary'])
                             
@@ -1039,6 +1167,17 @@ elif page == "Risk Analysis":
 
         st.metric("Correlation with Benchmark", f"{risk_data['correlation']:.3f}")
 
+        # ── CSV export of risk metrics ──────────────────────────────
+        try:
+            risk_export = {k: [v] for k, v in risk_data.items()
+                           if isinstance(v, (int, float, str))}
+            risk_df_exp = pd.DataFrame(risk_export)
+            st.download_button("⬇️ Download Risk Metrics (CSV)",
+                               risk_df_exp.to_csv(index=False),
+                               f"risk_{risk_symbol}_{risk_period}.csv", "text/csv")
+        except Exception:
+            pass
+
         st.markdown("---")
         risk_tab1, risk_tab2, risk_tab3 = st.tabs(["Risk Ratios", "Drawdown", "Rolling Volatility"])
         with risk_tab1:
@@ -1223,6 +1362,33 @@ elif page == "Technical Analysis":
             )
         if ta_fig:
             st.plotly_chart(ta_fig, use_container_width=True)
+            # ── Export raw OHLCV + indicator data ───────────────────
+            try:
+                import yfinance as _yf
+                _raw = _yf.Ticker(ta_symbol).history(period=ta_period, interval=ta_interval, auto_adjust=True)
+                if not _raw.empty:
+                    _raw = _raw.reset_index()
+                    _raw['SMA20']  = _raw['Close'].rolling(20).mean()
+                    _raw['SMA50']  = _raw['Close'].rolling(50).mean()
+                    _raw['EMA20']  = _raw['Close'].ewm(span=20, adjust=False).mean()
+                    _d             = _raw['Close'].diff()
+                    _g             = _d.clip(lower=0).ewm(com=13, adjust=False).mean()
+                    _l             = (-_d).clip(lower=0).ewm(com=13, adjust=False).mean()
+                    _raw['RSI14']  = 100 - 100 / (1 + _g / _l.replace(0, float('nan')))
+                    _raw['MACD']   = _raw['Close'].ewm(span=12,adjust=False).mean() - _raw['Close'].ewm(span=26,adjust=False).mean()
+                    _raw['Signal'] = _raw['MACD'].ewm(span=9, adjust=False).mean()
+                    _raw['BB_mid'] = _raw['Close'].rolling(20).mean()
+                    _raw['BB_std'] = _raw['Close'].rolling(20).std()
+                    _raw['BB_up']  = _raw['BB_mid'] + 2 * _raw['BB_std']
+                    _raw['BB_lo']  = _raw['BB_mid'] - 2 * _raw['BB_std']
+                    st.download_button(
+                        "⬇️ Download OHLCV + Indicators (CSV)",
+                        _raw.to_csv(index=False),
+                        f"ta_{ta_symbol}_{ta_period}.csv", "text/csv"
+                    )
+                    st.caption(f"Data freshness: fetched at {datetime.now().strftime('%H:%M:%S UTC')}")
+            except Exception:
+                pass
         else:
             st.error(f"Could not build technical chart for {ta_symbol}. Check the symbol or try a longer period.")
 
@@ -1511,7 +1677,7 @@ elif page == "Portfolio":
         
         # Portfolio Analytics Tabs
         if portfolio_value['holdings']:
-            p_tab1, p_tab2, p_tab3 = st.tabs(["Holdings", "Allocation", "Performance"])
+            p_tab1, p_tab2, p_tab3, p_tab4 = st.tabs(["Holdings", "Allocation", "Performance", "Optimizer"])
             with p_tab1:
                 pass  # filled below
             with p_tab2:
@@ -1524,6 +1690,51 @@ elif page == "Portfolio":
                     perf_fig = create_portfolio_performance_chart(portfolio_value['holdings'], perf_period)
                 if perf_fig:
                     st.plotly_chart(perf_fig, use_container_width=True)
+            with p_tab4:
+                st.subheader("🎯 Portfolio Optimizer (Mean-Variance)")
+                holding_syms = [h['symbol'] for h in portfolio_value['holdings']]
+                opt_syms_input = st.text_input(
+                    "Symbols to optimize (comma-separated)",
+                    value=", ".join(holding_syms[:8]) if holding_syms else "AAPL, MSFT, GOOGL"
+                )
+                opt_syms = [s.strip().upper() for s in opt_syms_input.split(",") if s.strip()]
+                opt_period = st.selectbox("Data period for optimization", ['1y','2y','3y'], index=0, key="opt_per")
+                opt_method = st.selectbox("Objective", ["max_sharpe", "min_vol", "equal_weight"])
+                if st.button("⚙️ Run Optimization", key="run_opt"):
+                    if len(opt_syms) < 2:
+                        st.warning("Enter at least 2 symbols.")
+                    else:
+                        with st.spinner("Optimizing portfolio… this may take 30–60 seconds…"):
+                            opt_result = data_fetcher.get_portfolio_optimization(
+                                opt_syms, period=opt_period, method=opt_method
+                            )
+                        if opt_result:
+                            o1, o2, o3 = st.columns(3)
+                            o1.metric("Expected Return (Ann.)", f"{opt_result['port_return']:.2f}%")
+                            o2.metric("Volatility (Ann.)",      f"{opt_result['port_vol']:.2f}%")
+                            o3.metric("Sharpe Ratio",           f"{opt_result['sharpe']:.3f}")
+                            # Weights table
+                            weights_df = pd.DataFrame({
+                                "Symbol": opt_result['symbols'],
+                                "Optimal Weight %": [round(w*100, 2) for w in opt_result['weights']]
+                            }).sort_values("Optimal Weight %", ascending=False)
+                            st.dataframe(weights_df.style.format({"Optimal Weight %": "{:.2f}%"}),
+                                         use_container_width=True, hide_index=True)
+                            # Download
+                            st.download_button("⬇️ Download Weights (CSV)",
+                                               weights_df.to_csv(index=False),
+                                               f"optimal_weights_{opt_method}.csv", "text/csv")
+                            # Charts
+                            fig_opt = create_portfolio_optimization_chart(
+                                opt_result['weights'], opt_result['symbols'], opt_method.replace("_"," ").title()
+                            )
+                            if fig_opt:
+                                st.plotly_chart(fig_opt, use_container_width=True)
+                            fig_ef = create_efficient_frontier_chart(opt_result.get('frontier'))
+                            if fig_ef:
+                                st.plotly_chart(fig_ef, use_container_width=True)
+                        else:
+                            st.error("Optimization failed. Check symbols and try again.")
 
         # Holdings table
         st.subheader("📈 Current Holdings")
@@ -1619,6 +1830,292 @@ elif page == "Portfolio":
             )
         else:
             st.info("No transactions found.")
+
+elif page == "Trend Signals":
+    st.header("📡 Trend Signals")
+    st.markdown("Unified trend direction and strength scores across all asset classes.")
+
+    # ── Timeframe selector ────────────────────────────────────────────
+    tf_label = st.selectbox("Lookback Timeframe", list(TIMEFRAME_DAYS.keys()), index=1)
+    lookback = TIMEFRAME_DAYS[tf_label]
+
+    # ── Symbol groups ─────────────────────────────────────────────────
+    SIGNAL_GROUPS = {
+        "US Equities": ["AAPL","MSFT","GOOGL","AMZN","NVDA","TSLA","META","JPM","BAC","XOM"],
+        "US Indices":  ["SPY","QQQ","DIA","IWM","^VIX"],
+        "Sector ETFs": ["XLK","XLF","XLE","XLV","XLI","XLY","XLP","XLC","XLRE","XLB","XLU"],
+        "Forex":       ["EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X"],
+        "Crypto":      ["BTC-USD","ETH-USD","SOL-USD","BNB-USD","XRP-USD"],
+        "Commodities": ["GC=F","SI=F","CL=F","NG=F","ZC=F","ZW=F"],
+        "Bonds":       ["TLT","IEF","SHY","HYG","LQD"],
+    }
+
+    selected_group = st.selectbox("Asset Group", list(SIGNAL_GROUPS.keys()))
+    symbols_to_scan = SIGNAL_GROUPS[selected_group]
+
+    extra_syms = st.text_input("Add custom tickers (comma-separated)", "")
+    if extra_syms.strip():
+        symbols_to_scan = symbols_to_scan + [s.strip().upper() for s in extra_syms.split(",") if s.strip()]
+
+    if st.button("🔍 Run Trend Scan"):
+        with st.spinner(f"Computing trend signals for {len(symbols_to_scan)} symbols…"):
+            signals = batch_trend_signals(symbols_to_scan, lookback_days=lookback)
+        st.session_state['trend_signals'] = signals
+
+    signals = st.session_state.get('trend_signals', [])
+
+    if not signals:
+        st.info("Select a group and click **Run Trend Scan** to compute signals.")
+    else:
+        # Summary metrics
+        ups     = sum(1 for s in signals if s['direction'] == 'UP')
+        downs   = sum(1 for s in signals if s['direction'] == 'DOWN')
+        neutral = sum(1 for s in signals if s['direction'] == 'NEUTRAL')
+        c1, c2, c3 = st.columns(3)
+        c1.metric("🟢 Bullish", ups)
+        c2.metric("🔴 Bearish", downs)
+        c3.metric("⚪ Neutral", neutral)
+
+        # Chart
+        fig_ts = create_trend_signal_heatmap(signals)
+        if fig_ts:
+            st.plotly_chart(fig_ts, use_container_width=True)
+
+        # Detail table
+        st.subheader("Signal Detail")
+        rows = []
+        for s in signals:
+            rows.append({
+                "Symbol":      s['symbol'],
+                "Signal":      f"{s['emoji']} {s['direction']}",
+                "Strength":    f"{s['strength']}/100",
+                "Score":       s['score'],
+                "Price":       s['last_price'],
+                "Momentum %":  f"{s['momentum_pct']:+.2f}%",
+                "RSI":         s['rsi'],
+                ">SMA20":      "✅" if s['above_sma20'] else "❌",
+                ">SMA50":      "✅" if s['above_sma50'] else "❌",
+                ">SMA200":     "✅" if s['above_sma200'] else "❌",
+                "MACD+":       "✅" if s['macd_positive'] else "❌",
+            })
+        df_ts = pd.DataFrame(rows)
+        st.dataframe(df_ts, use_container_width=True)
+
+        # CSV export
+        csv_ts = df_ts.to_csv(index=False)
+        st.download_button("⬇️ Download Signal Table (CSV)", csv_ts,
+                           f"trend_signals_{selected_group.lower().replace(' ','_')}.csv",
+                           "text/csv")
+
+
+elif page == "SEC & Insider Activity":
+    st.header("🏛️ SEC Filings & Insider Activity")
+    st.markdown("Browse SEC EDGAR filings and insider (Form 4) transactions.")
+
+    tab_filings, tab_insider, tab_search = st.tabs(["Company Filings", "Insider Transactions", "Full-Text Search"])
+
+    with tab_filings:
+        st.subheader("Recent SEC Filings by Ticker")
+        fi_sym = st.text_input("Ticker Symbol", value="AAPL", key="fi_sym").upper().strip()
+        fi_forms = st.multiselect("Form Types", ["10-K","10-Q","8-K","6-K","DEF 14A","S-1","13F"],
+                                  default=["10-K","10-Q","8-K"])
+        fi_limit = st.slider("Max Results", 5, 50, 20, key="fi_limit")
+
+        if st.button("Fetch Filings", key="btn_fi"):
+            with st.spinner(f"Fetching filings for {fi_sym}…"):
+                filings = get_company_filings(fi_sym, form_types=fi_forms, limit=fi_limit)
+            if filings:
+                df_fi = pd.DataFrame(filings)
+                st.dataframe(df_fi[['company','form_type','filed_date','description','url']],
+                             use_container_width=True)
+                csv_fi = df_fi.to_csv(index=False)
+                st.download_button("⬇️ Download (CSV)", csv_fi,
+                                   f"sec_filings_{fi_sym}.csv", "text/csv")
+            else:
+                st.warning(f"No filings found for {fi_sym} with selected form types.")
+
+    with tab_insider:
+        st.subheader("Insider Transactions (Form 4)")
+        ins_sym = st.text_input("Ticker Symbol", value="AAPL", key="ins_sym").upper().strip()
+        ins_limit = st.slider("Max Results", 5, 50, 30, key="ins_limit")
+        if st.button("Fetch Insider Activity", key="btn_ins"):
+            with st.spinner(f"Fetching Form 4 filings for {ins_sym}…"):
+                transactions = get_insider_transactions(ins_sym, limit=ins_limit)
+            if transactions:
+                df_ins = pd.DataFrame(transactions)
+                st.dataframe(df_ins, use_container_width=True)
+                csv_ins = df_ins.to_csv(index=False)
+                st.download_button("⬇️ Download (CSV)", csv_ins,
+                                   f"insider_transactions_{ins_sym}.csv", "text/csv")
+            else:
+                st.warning(f"No Form 4 filings found for {ins_sym}. (CIK lookup may have failed.)")
+
+    with tab_search:
+        st.subheader("SEC EDGAR Full-Text Search")
+        fts_query = st.text_input("Search query (company name, topic, keyword)", "artificial intelligence")
+        fts_forms = st.multiselect("Filter by Form Type", ["10-K","10-Q","8-K","6-K","DEF 14A","13F"],
+                                   default=["10-K","8-K"])
+        fts_days  = st.slider("Past N days", 7, 365, 90)
+        fts_limit = st.slider("Max Results", 5, 50, 20, key="fts_limit")
+        if st.button("Search EDGAR", key="btn_fts"):
+            with st.spinner(f"Searching SEC EDGAR for '{fts_query}'…"):
+                results = search_filings(fts_query, form_types=fts_forms,
+                                         days_back=fts_days, limit=fts_limit)
+            if results:
+                df_fts = pd.DataFrame(results)
+                st.dataframe(df_fts[['company','form_type','filed_date','period','url']],
+                             use_container_width=True)
+                csv_fts = df_fts.to_csv(index=False)
+                st.download_button("⬇️ Download (CSV)", csv_fts, "edgar_search_results.csv", "text/csv")
+            else:
+                st.warning("No results found. Try a different query or broader date range.")
+
+
+elif page == "Backtesting":
+    st.header("🧪 Backtesting Lab")
+    st.markdown("Run rule-based strategies on historical data and compare against buy-and-hold.")
+
+    col_cfg, col_res = st.columns([1, 2])
+
+    with col_cfg:
+        bt_symbol  = st.text_input("Symbol", value="AAPL").upper().strip()
+        bt_period  = st.selectbox("Data Period", ["6mo","1y","2y","3y","5y"], index=1)
+        bt_capital = st.number_input("Initial Capital ($)", value=10000, step=1000)
+        bt_size_pct= st.slider("Position Size (%)", 10, 100, 100, step=10)
+        bt_strategy= st.selectbox("Strategy", [
+            "SMA Crossover", "RSI Mean Reversion", "Bollinger Bands", "All Strategies"
+        ])
+
+        # Strategy-specific params
+        if bt_strategy in ("SMA Crossover", "All Strategies"):
+            st.markdown("**SMA params**")
+            sma_fast = st.number_input("Fast SMA", 5,  100, 20, key="sma_fast")
+            sma_slow = st.number_input("Slow SMA", 20, 300, 50, key="sma_slow")
+        else:
+            sma_fast, sma_slow = 20, 50
+
+        if bt_strategy in ("RSI Mean Reversion", "All Strategies"):
+            st.markdown("**RSI params**")
+            rsi_period    = st.number_input("RSI Period",   5,  30, 14, key="rsi_per")
+            rsi_oversold  = st.slider("Oversold",  10, 50, 30, key="rsi_os")
+            rsi_overbought= st.slider("Overbought",50, 90, 70, key="rsi_ob")
+        else:
+            rsi_period, rsi_oversold, rsi_overbought = 14, 30, 70
+
+        if bt_strategy in ("Bollinger Bands", "All Strategies"):
+            st.markdown("**BB params**")
+            bb_period = st.number_input("BB Period", 5,  60, 20, key="bb_per")
+            bb_std    = st.number_input("Std Mult",  1.0, 4.0, 2.0, step=0.25, key="bb_std")
+        else:
+            bb_period, bb_std = 20, 2.0
+
+        run_mc_sim = st.checkbox("Run Monte Carlo simulation", value=True)
+        run_bt = st.button("▶ Run Backtest", type="primary")
+
+    with col_res:
+        if run_bt:
+            results = {}
+            bnh = run_buy_and_hold(bt_symbol, bt_period, bt_capital)
+            results["Buy & Hold"] = bnh
+
+            with st.spinner("Running strategies…"):
+                if bt_strategy in ("SMA Crossover","All Strategies"):
+                    results["SMA Crossover"] = run_sma_crossover(
+                        bt_symbol, bt_period, int(sma_fast), int(sma_slow),
+                        bt_capital, bt_size_pct)
+                if bt_strategy in ("RSI Mean Reversion","All Strategies"):
+                    results["RSI"] = run_rsi_strategy(
+                        bt_symbol, bt_period, int(rsi_period),
+                        rsi_oversold, rsi_overbought, bt_capital, bt_size_pct)
+                if bt_strategy in ("Bollinger Bands","All Strategies"):
+                    results["Bollinger Bands"] = run_bollinger_band_strategy(
+                        bt_symbol, bt_period, int(bb_period), bb_std,
+                        bt_capital, bt_size_pct)
+
+            # Filter out errors
+            valid = {k: v for k, v in results.items() if 'error' not in v}
+            if not valid:
+                st.error("No valid results. Check symbol and period.")
+            else:
+                # ── Summary metrics ────────────────────────────────────
+                st.subheader("Strategy Comparison")
+                metrics = ['strategy','total_return','annual_return','volatility',
+                           'max_drawdown','sharpe_ratio','num_trades','win_rate']
+                rows_bt = []
+                for name, r in valid.items():
+                    rows_bt.append({m: r.get(m, 'N/A') for m in metrics})
+                df_bt = pd.DataFrame(rows_bt)
+                df_bt.columns = ['Strategy','Total Ret %','Ann Ret %','Vol %',
+                                  'Max DD %','Sharpe','# Trades','Win Rate %']
+                st.dataframe(df_bt.style.format({
+                    'Total Ret %': '{:.2f}', 'Ann Ret %': '{:.2f}',
+                    'Vol %': '{:.2f}',       'Max DD %': '{:.2f}',
+                    'Sharpe': '{:.3f}',      'Win Rate %': '{:.1f}'
+                }), use_container_width=True)
+
+                csv_bt = df_bt.to_csv(index=False)
+                st.download_button("⬇️ Download Summary (CSV)", csv_bt,
+                                   f"backtest_{bt_symbol}.csv", "text/csv")
+
+                # ── Equity curves ──────────────────────────────────────
+                st.subheader("Equity Curves")
+                bnh_curve = valid.get("Buy & Hold",{}).get('equity_curve')
+                for name, r in valid.items():
+                    if name == "Buy & Hold":
+                        continue
+                    fig_ec = create_equity_curve_chart(
+                        r['equity_curve'], bt_capital,
+                        f"{bt_symbol} — {name}", bnh_curve)
+                    if fig_ec:
+                        st.plotly_chart(fig_ec, use_container_width=True)
+
+                # ── Trade log ──────────────────────────────────────────
+                all_trades = []
+                for name, r in valid.items():
+                    for t in r.get('trade_log', []):
+                        all_trades.append({'Strategy': name, **t})
+
+                if all_trades:
+                    st.subheader("Trade Log")
+                    df_log = pd.DataFrame(all_trades)
+                    st.dataframe(df_log.style.format({
+                        'entry': '${:.2f}', 'exit': '${:.2f}',
+                        'pnl': '${:.2f}',   'pnl_pct': '{:.2f}%'
+                    }), use_container_width=True)
+
+                    # Distribution per strategy
+                    for name, r in valid.items():
+                        if name == "Buy & Hold" or not r.get('trade_log'):
+                            continue
+                        fig_td = create_trade_distribution_chart(r['trade_log'])
+                        if fig_td:
+                            st.markdown(f"**{name} — Trade P&L Distribution**")
+                            st.plotly_chart(fig_td, use_container_width=True)
+
+                # ── Monte Carlo ────────────────────────────────────────
+                if run_mc_sim:
+                    import yfinance as yf
+                    st.subheader("Monte Carlo Simulation (1-year forward, 500 paths)")
+                    try:
+                        h = yf.Ticker(bt_symbol).history(period=bt_period, auto_adjust=True)
+                        if not h.empty:
+                            rets = h['Close'].pct_change().dropna()
+                            mc_res = run_monte_carlo(rets, initial_capital=bt_capital,
+                                                     n_simulations=500, n_days=252)
+                            if mc_res:
+                                m1, m2, m3, m4 = st.columns(4)
+                                m1.metric("Median (1yr)", f"${mc_res['median']:,.0f}")
+                                m2.metric("P10 (Bear)", f"${mc_res['p10']:,.0f}")
+                                m3.metric("P90 (Bull)", f"${mc_res['p90']:,.0f}")
+                                m4.metric("Prob Profit", f"{mc_res['prob_profit']:.1f}%")
+                                fig_mc = create_monte_carlo_chart(mc_res, bt_capital)
+                                if fig_mc:
+                                    st.plotly_chart(fig_mc, use_container_width=True)
+                    except Exception as mc_err:
+                        st.warning(f"Monte Carlo failed: {mc_err}")
+        else:
+            st.info("Configure your strategy on the left and click **▶ Run Backtest**.")
+
 
 elif page == "Database Stats":
     st.header("📊 Database Statistics")

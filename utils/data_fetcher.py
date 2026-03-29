@@ -504,3 +504,128 @@ class DataFetcher:
                 'Extreme Greed'
             )
         }
+
+    @st.cache_data(ttl=300)
+    def get_top_movers_broad(_self, limit=10):
+        """
+        Fetch top gainers and losers from a broad watchlist.
+        Returns {'gainers': [...], 'losers': [...]}
+        """
+        symbols = [
+            'AAPL','MSFT','GOOGL','AMZN','NVDA','TSLA','META','BRK-B','JPM','JNJ',
+            'V','UNH','XOM','WMT','PG','MA','LLY','HD','ABBV','CVX',
+            'BAC','PFE','KO','COST','DIS','NFLX','AMD','INTC','MRK','T',
+            'SPY','QQQ','IWM','XLK','XLE','XLF','GLD','SLV','TLT','HYG',
+            'BTC-USD','ETH-USD','SOL-USD','EURUSD=X','GBPUSD=X',
+            'GC=F','CL=F','ES=F','NQ=F','^VIX'
+        ]
+        movers = []
+        for sym in symbols:
+            d = _self._fetch_ticker_data(sym)
+            if d:
+                movers.append({
+                    'symbol': sym,
+                    'price': d['price'],
+                    'change': d['change'],
+                    'change_pct': d['change_pct']
+                })
+        gainers = sorted(movers, key=lambda x: x['change_pct'], reverse=True)[:limit]
+        losers  = sorted(movers, key=lambda x: x['change_pct'])[:limit]
+        return {'gainers': gainers, 'losers': losers}
+
+    @st.cache_data(ttl=3600)
+    def get_portfolio_optimization(_self, symbols, period='1y', method='max_sharpe'):
+        """
+        Mean-variance portfolio optimization using scipy.
+        method: 'max_sharpe' | 'min_vol' | 'equal_weight'
+        Returns weights list aligned to symbols.
+        """
+        try:
+            import scipy.optimize as sco
+            import yfinance as yf
+            import numpy as np
+
+            prices = {}
+            for sym in symbols:
+                t = yf.download(sym, period=period, progress=False, auto_adjust=True)
+                if not t.empty:
+                    prices[sym] = t['Close'].squeeze()
+
+            if len(prices) < 2:
+                return None
+
+            df = pd.DataFrame(prices).dropna()
+            rets = df.pct_change().dropna()
+            n = len(df.columns)
+            valid_syms = list(df.columns)
+
+            mu    = rets.mean().values * 252
+            sigma = rets.cov().values  * 252
+
+            def neg_sharpe(w):
+                port_ret = np.dot(w, mu)
+                port_vol = np.sqrt(np.dot(w, np.dot(sigma, w)))
+                return -(port_ret - 0.05) / port_vol if port_vol > 0 else 0
+
+            def port_vol(w):
+                return np.sqrt(np.dot(w, np.dot(sigma, w)))
+
+            constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
+            bounds      = [(0, 1)] * n
+            w0          = np.array([1/n] * n)
+
+            if method == 'equal_weight':
+                weights = w0.tolist()
+            elif method == 'min_vol':
+                res = sco.minimize(port_vol, w0, method='SLSQP',
+                                   bounds=bounds, constraints=constraints,
+                                   options={'ftol': 1e-9, 'maxiter': 1000})
+                weights = res.x.tolist()
+            else:  # max_sharpe
+                res = sco.minimize(neg_sharpe, w0, method='SLSQP',
+                                   bounds=bounds, constraints=constraints,
+                                   options={'ftol': 1e-9, 'maxiter': 1000})
+                weights = res.x.tolist()
+
+            # Port metrics
+            w  = np.array(weights)
+            pr = float(np.dot(w, mu))
+            pv = float(np.sqrt(np.dot(w, np.dot(sigma, w))))
+            sh = (pr - 0.05) / pv if pv > 0 else 0
+
+            # Efficient frontier
+            target_rets = np.linspace(mu.min(), mu.max(), 40)
+            ef_vols, ef_rets = [], []
+            max_sh_vol = max_sh_ret = None
+            best_sh = -np.inf
+            for tr in target_rets:
+                cons = [{'type': 'eq', 'fun': lambda w, tr=tr: np.dot(w, mu) - tr},
+                        {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
+                r = sco.minimize(port_vol, w0, method='SLSQP',
+                                 bounds=bounds, constraints=cons,
+                                 options={'ftol': 1e-9, 'maxiter': 500})
+                if r.success:
+                    v = float(port_vol(r.x))
+                    ef_vols.append(v)
+                    ef_rets.append(float(tr))
+                    sh_i = (float(tr) - 0.05) / v if v > 0 else -np.inf
+                    if sh_i > best_sh:
+                        best_sh = sh_i
+                        max_sh_vol, max_sh_ret = v, float(tr)
+
+            return {
+                'symbols':      valid_syms,
+                'weights':      weights,
+                'method':       method,
+                'port_return':  round(pr * 100, 2),
+                'port_vol':     round(pv * 100, 2),
+                'sharpe':       round(sh, 3),
+                'frontier': {
+                    'vols': ef_vols, 'rets': ef_rets,
+                    'sharpe_vols': max_sh_vol,
+                    'sharpe_rets': max_sh_ret
+                }
+            }
+        except Exception as e:
+            logger.error(f"Portfolio optimization error: {e}")
+            return None

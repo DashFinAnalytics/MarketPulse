@@ -720,3 +720,178 @@ def create_market_breadth_chart(breadth_data):
     except Exception as e:
         logger.error(f"Error creating market breadth chart: {str(e)}")
         return None
+
+
+def create_equity_curve_chart(equity_curve, initial_capital, strategy_name,
+                               benchmark_curve=None):
+    """Plot strategy equity curve vs optional benchmark."""
+    try:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            y=equity_curve, mode='lines', name=strategy_name,
+            line=dict(color='royalblue', width=2)
+        ))
+        if benchmark_curve is not None:
+            fig.add_trace(go.Scatter(
+                y=benchmark_curve, mode='lines', name='Buy & Hold',
+                line=dict(color='orange', width=2, dash='dash')
+            ))
+        fig.add_hline(y=initial_capital, line_dash='dash',
+                      line_color='gray', opacity=0.5)
+        fig.update_layout(
+            title=f"Equity Curve — {strategy_name}",
+            xaxis_title="Bar", yaxis_title="Portfolio Value ($)",
+            template="plotly_white", height=400
+        )
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating equity curve chart: {e}")
+        return None
+
+
+def create_trade_distribution_chart(trades):
+    """Histogram of trade P&L %."""
+    try:
+        if not trades:
+            return None
+        pnl = [t['pnl_pct'] for t in trades]
+        colors = ['green' if p > 0 else 'red' for p in pnl]
+        fig = go.Figure(go.Bar(
+            x=list(range(1, len(pnl)+1)), y=pnl,
+            marker_color=colors,
+            text=[f"{p:+.2f}%" for p in pnl],
+            textposition='auto'
+        ))
+        fig.add_hline(y=0, line_dash='dash', line_color='gray', opacity=0.5)
+        fig.update_layout(
+            title="Individual Trade P&L",
+            xaxis_title="Trade #", yaxis_title="P&L %",
+            template="plotly_white", height=350, showlegend=False
+        )
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating trade distribution chart: {e}")
+        return None
+
+
+def create_monte_carlo_chart(mc_result, initial_capital):
+    """Fan chart from Monte Carlo simulation paths."""
+    try:
+        if mc_result is None:
+            return None
+        paths = mc_result['paths']
+        n_days = paths.shape[1]
+        x = list(range(n_days))
+        fig = go.Figure()
+        # Plot a random subset of paths (grey)
+        n_show = min(100, paths.shape[0])
+        for i in range(n_show):
+            fig.add_trace(go.Scatter(
+                x=x, y=paths[i], mode='lines',
+                line=dict(color='rgba(100,100,100,0.08)', width=1),
+                showlegend=False
+            ))
+        # Percentile lines
+        for pct, label, color in [(10, 'P10', 'red'), (50, 'Median', 'blue'),
+                                   (90, 'P90', 'green')]:
+            pct_path = np.percentile(paths, pct, axis=0)
+            fig.add_trace(go.Scatter(
+                x=x, y=pct_path, mode='lines', name=label,
+                line=dict(color=color, width=2)
+            ))
+        fig.add_hline(y=initial_capital, line_dash='dash',
+                      line_color='orange', opacity=0.7,
+                      annotation_text='Initial Capital')
+        fig.update_layout(
+            title="Monte Carlo Simulation (1-Year Paths)",
+            xaxis_title="Trading Days", yaxis_title="Portfolio Value ($)",
+            template="plotly_white", height=420
+        )
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating Monte Carlo chart: {e}")
+        return None
+
+
+def create_trend_signal_heatmap(signals):
+    """
+    Colour-coded heatmap of trend signals (strength × direction) for all symbols.
+    """
+    try:
+        if not signals:
+            return None
+        symbols = [s['symbol'] for s in signals]
+        scores  = [s['score']  for s in signals]
+        fig = go.Figure(go.Bar(
+            x=symbols, y=scores,
+            marker_color=['green' if sc > 0 else ('red' if sc < 0 else 'gray')
+                          for sc in scores],
+            text=[f"{s['emoji']} {s['direction']}" for s in signals],
+            textposition='auto'
+        ))
+        fig.add_hline(y=30,  line_dash='dash', line_color='green', opacity=0.5,
+                      annotation_text='Strong UP')
+        fig.add_hline(y=-30, line_dash='dash', line_color='red',   opacity=0.5,
+                      annotation_text='Strong DOWN')
+        fig.add_hline(y=0,   line_dash='dot',  line_color='gray',  opacity=0.4)
+        fig.update_layout(
+            title="Trend Signal Scores (–100 = strong down, +100 = strong up)",
+            xaxis_title="Symbol", yaxis_title="Score",
+            template="plotly_white", height=400, showlegend=False
+        )
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating trend heatmap: {e}")
+        return None
+
+
+def create_portfolio_optimization_chart(weights, symbols, method_name):
+    """Pie chart of optimal portfolio weights."""
+    try:
+        if not weights or not symbols:
+            return None
+        fig = go.Figure(go.Pie(
+            labels=symbols, values=[max(0, w) for w in weights],
+            hole=0.4, textinfo='label+percent',
+            hovertemplate='%{label}: %{percent}<extra></extra>'
+        ))
+        fig.update_layout(
+            title=f"Optimal Weights — {method_name}",
+            height=420, template="plotly_white"
+        )
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating optimization chart: {e}")
+        return None
+
+
+def create_efficient_frontier_chart(frontier_data):
+    """Plot the efficient frontier curve."""
+    try:
+        if frontier_data is None:
+            return None
+        vols   = frontier_data['vols']
+        rets   = frontier_data['rets']
+        sharpe = frontier_data.get('sharpe_vols'), frontier_data.get('sharpe_rets')
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=vols, y=rets, mode='lines+markers',
+            name='Efficient Frontier',
+            line=dict(color='royalblue', width=2),
+            marker=dict(size=4)
+        ))
+        if sharpe[0] is not None:
+            fig.add_trace(go.Scatter(
+                x=[sharpe[0]], y=[sharpe[1]],
+                mode='markers', name='Max Sharpe',
+                marker=dict(color='gold', size=14, symbol='star')
+            ))
+        fig.update_layout(
+            title="Efficient Frontier",
+            xaxis_title="Volatility (Ann.)", yaxis_title="Return (Ann.)",
+            template="plotly_white", height=420
+        )
+        return fig
+    except Exception as e:
+        logger.error(f"Error creating efficient frontier chart: {e}")
+        return None
