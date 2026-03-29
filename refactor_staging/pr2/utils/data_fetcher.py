@@ -51,23 +51,25 @@ class DataFetcher:
             logger.warning("Failed to persist fetched data", symbol=symbol, data_type=data_type, error=str(exc))
 
     def _download_history(self, symbol: str, period: str) -> pd.DataFrame:
-        symbol = self._validate_symbol(symbol)
-        for attempt in range(self.retry_attempts):
-            try:
-                ticker = yf.Ticker(symbol)
-                history = ticker.history(period=period)
-                return history if isinstance(history, pd.DataFrame) else pd.DataFrame()
-            except Exception as exc:
-                logger.warning(
-                    "History fetch attempt failed",
-                    symbol=symbol,
-                    period=period,
-                    attempt=attempt + 1,
-                    error=str(exc),
-                )
-                if attempt < self.retry_attempts - 1:
-                    self._sleep_before_retry(attempt)
-        return pd.DataFrame()
+    symbol = self._validate_symbol(symbol)
+    for attempt in range(max(1, self.retry_attempts)):
+        try:
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(period=period)
+            return (
+                history if isinstance(history, pd.DataFrame) else pd.DataFrame()
+            )
+        except Exception as exc:
+            logger.warning(
+                "History fetch attempt failed",
+                symbol=symbol,
+                period=period,
+                attempt=attempt + 1,
+                error=str(exc),
+            )
+            if attempt < self.retry_attempts - 1:
+                self._sleep_before_retry(attempt)
+    return pd.DataFrame()
 
     @st.cache_data(ttl=60)
     @log_api_call("Yahoo Finance")
