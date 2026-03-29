@@ -29,8 +29,11 @@ if _ENV_PATH.exists():
         load_dotenv(_ENV_PATH)
     else:
         warnings.warn(
-            f"Config: .env file found at {_ENV_PATH} but python-dotenv is not installed; "
-            "environment variables from this file will be ignored.",
+            (
+                f"Config: .env file found at {_ENV_PATH} but python-dotenv "
+                "is not installed; environment variables from this file "
+                "will be ignored."
+            ),
             RuntimeWarning,
             stacklevel=2,
         )
@@ -40,19 +43,25 @@ def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
+
     normalized = value.strip().lower()
     true_values = {"1", "true", "yes", "on"}
     false_values = {"0", "false", "no", "off"}
+
     if normalized in true_values:
         return True
     if normalized in false_values:
         return False
+
     warnings.warn(
-        f"Config: unrecognized boolean value for {name!r}: {value!r}; using default {default}",
+        (
+            f"Config: unrecognized boolean value for {name!r}: {value!r}; "
+            f"using default {default}"
+        ),
+        RuntimeWarning,
         stacklevel=2,
     )
     return default
-
 
 def _env_int(name: str, default: int) -> int:
     value = os.getenv(name)
