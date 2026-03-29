@@ -32,7 +32,18 @@ def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    normalized = value.strip().lower()
+    true_values = {"1", "true", "yes", "on"}
+    false_values = {"0", "false", "no", "off"}
+    if normalized in true_values:
+        return True
+    if normalized in false_values:
+        return False
+    warnings.warn(
+        f"Config: unrecognized boolean value for {name!r}: {value!r}; using default {default}",
+        stacklevel=2,
+    )
+    return default
 
 
 def _env_int(name: str, default: int) -> int:
