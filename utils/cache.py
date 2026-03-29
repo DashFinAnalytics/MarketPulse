@@ -6,12 +6,17 @@ state and logic that should not depend on Streamlit runtime semantics.
 
 from __future__ import annotations
 
+import hashlib
+import logging
+import pickle
 import threading
 import time
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
 from config import config
+
+_log = logging.getLogger(__name__)
 
 
 class MemoryCache:
@@ -82,10 +87,21 @@ def cached(ttl: Optional[int] = None, key_func: Optional[Callable[..., str]] = N
             if key_func:
                 cache_key = key_func(*args, **kwargs)
             else:
-                parts = [func.__name__]
-                parts.extend(str(arg) for arg in args)
-                parts.extend(f"{key}={value}" for key, value in sorted(kwargs.items()))
-                cache_key = ":".join(parts)
+                func_id = f"{func.__module__}.{func.__qualname__}"
+                try:
+                    args_hash = hashlib.sha256(
+                        pickle.dumps((args, sorted(kwargs.items())))
+                    ).hexdigest()
+                except (pickle.PickleError, TypeError) as exc:
+                    _log.warning(
+                        "cache: pickle serialisation failed for %s; falling back to repr. Error: %s",
+                        func_id,
+                        exc,
+                    )
+                    args_hash = hashlib.sha256(
+                        repr((args, sorted(kwargs.items()))).encode()
+                    ).hexdigest()
+                cache_key = f"{func_id}:{args_hash}"
 
             result = cache.get(cache_key)
             if result is not None:
