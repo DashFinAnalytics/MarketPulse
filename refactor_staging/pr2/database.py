@@ -6,7 +6,18 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Any, Dict, Generator, List, Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, create_engine, text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Engine,
+    Float,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -43,13 +54,17 @@ def _engine_kwargs() -> Dict[str, Any]:
     return kwargs
 
 
-def get_engine():
+def get_engine() -> Optional[Engine]:
     global engine
     if engine is not None:
         return engine
 
     if not config.database.is_available:
-        logger.warning("Database unavailable", configured=config.database.is_configured, enabled=config.database.enabled)
+        logger.warning(
+            "Database unavailable",
+            configured=config.database.is_configured,
+            enabled=config.database.enabled,
+        )
         return None
 
     try:
@@ -65,7 +80,7 @@ def get_engine():
     return engine
 
 
-def get_session_factory():
+def get_session_factory() -> Optional[sessionmaker]:
     global SessionLocal
     if SessionLocal is not None:
         return SessionLocal
@@ -217,7 +232,9 @@ class DatabaseManager:
         try:
             db_engine = get_engine()
             if db_engine is None:
-                logger.warning("Skipping table creation because database is unavailable")
+                logger.warning(
+                    "Skipping table creation because database is unavailable"
+                )
                 return False
             Base.metadata.create_all(bind=db_engine)
             logger.info("Database tables created")
@@ -239,7 +256,9 @@ class DatabaseManager:
             logger.warning("Database health check failed", error=str(exc))
             return False
 
-    def store_financial_data(self, symbol: str, data: Dict[str, Any], data_type: str) -> bool:
+    def store_financial_data(
+        self, symbol: str, data: Dict[str, Any], data_type: str
+    ) -> bool:
         try:
             with get_db_session() as session:
                 session.add(
@@ -254,7 +273,9 @@ class DatabaseManager:
                 )
             return True
         except Exception as exc:
-            logger.warning("Failed to persist financial data", symbol=symbol, error=str(exc))
+            logger.warning(
+                "Failed to persist financial data", symbol=symbol, error=str(exc)
+            )
             return False
 
     def get_historical_data(self, symbol: str, hours: int = 24) -> List[Dict[str, Any]]:
@@ -263,7 +284,10 @@ class DatabaseManager:
             with get_db_session() as session:
                 records = (
                     session.query(FinancialData)
-                    .filter(FinancialData.symbol == symbol, FinancialData.timestamp >= cutoff)
+                    .filter(
+                        FinancialData.symbol == symbol,
+                        FinancialData.timestamp >= cutoff,
+                    )
                     .order_by(FinancialData.timestamp.desc())
                     .all()
                 )
@@ -279,13 +303,21 @@ class DatabaseManager:
                     for record in records
                 ]
         except Exception as exc:
-            logger.warning("Historical data unavailable from database", symbol=symbol, error=str(exc))
+            logger.warning(
+                "Historical data unavailable from database",
+                symbol=symbol,
+                error=str(exc),
+            )
             return []
 
     def save_user_preferences(self, user_id: str, preferences: Dict[str, Any]) -> bool:
         try:
             with get_db_session() as session:
-                existing = session.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
+                existing = (
+                    session.query(UserPreferences)
+                    .filter(UserPreferences.user_id == user_id)
+                    .first()
+                )
                 if existing:
                     for key, value in preferences.items():
                         if hasattr(existing, key) and key != "id":
@@ -294,13 +326,19 @@ class DatabaseManager:
                     session.add(UserPreferences(user_id=user_id, **preferences))
             return True
         except Exception as exc:
-            logger.warning("Failed to save user preferences", user_id=user_id, error=str(exc))
+            logger.warning(
+                "Failed to save user preferences", user_id=user_id, error=str(exc)
+            )
             return False
 
     def get_user_preferences(self, user_id: str) -> Optional[Dict[str, Any]]:
         try:
             with get_db_session() as session:
-                prefs = session.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
+                prefs = (
+                    session.query(UserPreferences)
+                    .filter(UserPreferences.user_id == user_id)
+                    .first()
+                )
                 if not prefs:
                     return None
                 return {
@@ -309,10 +347,14 @@ class DatabaseManager:
                     "favorite_symbols": prefs.favorite_symbols,
                 }
         except Exception as exc:
-            logger.warning("Failed to get user preferences", user_id=user_id, error=str(exc))
+            logger.warning(
+                "Failed to get user preferences", user_id=user_id, error=str(exc)
+            )
             return None
 
-    def create_market_alert(self, user_id: str, symbol: str, alert_type: str, target_price: float) -> bool:
+    def create_market_alert(
+        self, user_id: str, symbol: str, alert_type: str, target_price: float
+    ) -> bool:
         try:
             with get_db_session() as session:
                 session.add(
@@ -325,13 +367,20 @@ class DatabaseManager:
                 )
             return True
         except Exception as exc:
-            logger.warning("Failed to create market alert", user_id=user_id, symbol=symbol, error=str(exc))
+            logger.warning(
+                "Failed to create market alert",
+                user_id=user_id,
+                symbol=symbol,
+                error=str(exc),
+            )
             return False
 
     def get_active_alerts(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         try:
             with get_db_session() as session:
-                query = session.query(MarketAlerts).filter(MarketAlerts.is_active.is_(True))
+                query = session.query(MarketAlerts).filter(
+                    MarketAlerts.is_active.is_(True)
+                )
                 if user_id:
                     query = query.filter(MarketAlerts.user_id == user_id)
                 alerts = query.all()
@@ -361,9 +410,8 @@ class DatabaseManager:
                 target_price = alert["target_price"]
                 alert_type = alert["alert_type"]
                 is_triggered = (
-                    (alert_type == "above" and current_price >= target_price)
-                    or (alert_type == "below" and current_price <= target_price)
-                )
+                    alert_type == "above" and current_price >= target_price
+                ) or (alert_type == "below" and current_price <= target_price)
                 if not is_triggered:
                     continue
                 triggered.append(
@@ -384,13 +432,19 @@ class DatabaseManager:
     def deactivate_alert(self, alert_id: str) -> bool:
         try:
             with get_db_session() as session:
-                alert = session.query(MarketAlerts).filter(MarketAlerts.id == uuid.UUID(alert_id)).first()
+                alert = (
+                    session.query(MarketAlerts)
+                    .filter(MarketAlerts.id == uuid.UUID(alert_id))
+                    .first()
+                )
                 if not alert:
                     return False
                 alert.is_active = False
             return True
         except Exception as exc:
-            logger.warning("Failed to deactivate alert", alert_id=alert_id, error=str(exc))
+            logger.warning(
+                "Failed to deactivate alert", alert_id=alert_id, error=str(exc)
+            )
             return False
 
     def get_market_statistics(self) -> Dict[str, Any]:
@@ -401,12 +455,16 @@ class DatabaseManager:
                 stats: Dict[str, Any] = {}
                 for data_type in ["index", "commodity", "bond", "vix", "sector"]:
                     stats[f"{data_type}_records"] = (
-                        session.query(FinancialData).filter(FinancialData.data_type == data_type).count()
+                        session.query(FinancialData)
+                        .filter(FinancialData.data_type == data_type)
+                        .count()
                     )
                 volatile = (
                     session.query(
                         FinancialData.symbol,
-                        func.avg(func.abs(FinancialData.change_pct)).label("avg_volatility"),
+                        func.avg(func.abs(FinancialData.change_pct)).label(
+                            "avg_volatility"
+                        ),
                     )
                     .group_by(FinancialData.symbol)
                     .order_by(func.avg(func.abs(FinancialData.change_pct)).desc())
@@ -441,7 +499,9 @@ class DatabaseManager:
                 session.flush()
                 return str(portfolio.id)
         except Exception as exc:
-            logger.warning("Failed to create portfolio", user_id=user_id, name=name, error=str(exc))
+            logger.warning(
+                "Failed to create portfolio", user_id=user_id, name=name, error=str(exc)
+            )
             return None
 
     def get_user_portfolios(self, user_id: str) -> List[Dict[str, Any]]:
@@ -465,10 +525,19 @@ class DatabaseManager:
                     for portfolio in portfolios
                 ]
         except Exception as exc:
-            logger.warning("Failed to get user portfolios", user_id=user_id, error=str(exc))
+            logger.warning(
+                "Failed to get user portfolios", user_id=user_id, error=str(exc)
+            )
             return []
 
-    def add_holding(self, portfolio_id: str, symbol: str, quantity: float, price: float, notes: str = "") -> bool:
+    def add_holding(
+        self,
+        portfolio_id: str,
+        symbol: str,
+        quantity: float,
+        price: float,
+        notes: str = "",
+    ) -> bool:
         try:
             with get_db_session() as session:
                 existing = (
@@ -481,9 +550,13 @@ class DatabaseManager:
                 )
                 if existing:
                     total_quantity = existing.quantity + quantity
-                    total_cost = (existing.quantity * existing.average_cost) + (quantity * price)
+                    total_cost = (existing.quantity * existing.average_cost) + (
+                        quantity * price
+                    )
                     existing.quantity = total_quantity
-                    existing.average_cost = total_cost / total_quantity if total_quantity > 0 else price
+                    existing.average_cost = (
+                        total_cost / total_quantity if total_quantity > 0 else price
+                    )
                     existing.updated_at = datetime.utcnow()
                     if notes:
                         existing.notes = notes
@@ -510,10 +583,22 @@ class DatabaseManager:
                 )
             return True
         except Exception as exc:
-            logger.warning("Failed to add holding", portfolio_id=portfolio_id, symbol=symbol, error=str(exc))
+            logger.warning(
+                "Failed to add holding",
+                portfolio_id=portfolio_id,
+                symbol=symbol,
+                error=str(exc),
+            )
             return False
 
-    def sell_holding(self, portfolio_id: str, symbol: str, quantity: float, price: float, notes: str = "") -> bool:
+    def sell_holding(
+        self,
+        portfolio_id: str,
+        symbol: str,
+        quantity: float,
+        price: float,
+        notes: str = "",
+    ) -> bool:
         try:
             with get_db_session() as session:
                 holding = (
@@ -543,7 +628,12 @@ class DatabaseManager:
                 )
             return True
         except Exception as exc:
-            logger.warning("Failed to sell holding", portfolio_id=portfolio_id, symbol=symbol, error=str(exc))
+            logger.warning(
+                "Failed to sell holding",
+                portfolio_id=portfolio_id,
+                symbol=symbol,
+                error=str(exc),
+            )
             return False
 
     def get_portfolio_holdings(self, portfolio_id: str) -> List[Dict[str, Any]]:
@@ -566,10 +656,16 @@ class DatabaseManager:
                     for holding in holdings
                 ]
         except Exception as exc:
-            logger.warning("Failed to get portfolio holdings", portfolio_id=portfolio_id, error=str(exc))
+            logger.warning(
+                "Failed to get portfolio holdings",
+                portfolio_id=portfolio_id,
+                error=str(exc),
+            )
             return []
 
-    def get_portfolio_transactions(self, portfolio_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_portfolio_transactions(
+        self, portfolio_id: str, limit: int = 50
+    ) -> List[Dict[str, Any]]:
         try:
             with get_db_session() as session:
                 transactions = (
@@ -594,10 +690,16 @@ class DatabaseManager:
                     for transaction in transactions
                 ]
         except Exception as exc:
-            logger.warning("Failed to get portfolio transactions", portfolio_id=portfolio_id, error=str(exc))
+            logger.warning(
+                "Failed to get portfolio transactions",
+                portfolio_id=portfolio_id,
+                error=str(exc),
+            )
             return []
 
-    def calculate_portfolio_value(self, portfolio_id: str, current_prices: Dict[str, float]) -> Dict[str, Any]:
+    def calculate_portfolio_value(
+        self, portfolio_id: str, current_prices: Dict[str, float]
+    ) -> Dict[str, Any]:
         try:
             holdings = self.get_portfolio_holdings(portfolio_id)
             total_value = 0.0
@@ -627,7 +729,9 @@ class DatabaseManager:
                 total_value += market_value
                 total_cost += cost_basis
             total_gain_loss = total_value - total_cost
-            total_gain_loss_pct = (total_gain_loss / total_cost) * 100 if total_cost > 0 else 0
+            total_gain_loss_pct = (
+                (total_gain_loss / total_cost) * 100 if total_cost > 0 else 0
+            )
             return {
                 "total_value": total_value,
                 "total_cost": total_cost,
@@ -636,7 +740,11 @@ class DatabaseManager:
                 "holdings": details,
             }
         except Exception as exc:
-            logger.warning("Failed to calculate portfolio value", portfolio_id=portfolio_id, error=str(exc))
+            logger.warning(
+                "Failed to calculate portfolio value",
+                portfolio_id=portfolio_id,
+                error=str(exc),
+            )
             return {
                 "total_value": 0.0,
                 "total_cost": 0.0,
@@ -648,7 +756,11 @@ class DatabaseManager:
     def store_news_article(self, article: Dict[str, Any]) -> bool:
         try:
             with get_db_session() as session:
-                existing = session.query(NewsArticle).filter(NewsArticle.url == article["link"]).first()
+                existing = (
+                    session.query(NewsArticle)
+                    .filter(NewsArticle.url == article["link"])
+                    .first()
+                )
                 if existing:
                     return True
                 session.add(
@@ -669,13 +781,17 @@ class DatabaseManager:
             logger.warning("Failed to store news article", error=str(exc))
             return False
 
-    def get_stored_news(self, limit: int = 20, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_stored_news(
+        self, limit: int = 20, symbol: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         try:
             with get_db_session() as session:
                 query = session.query(NewsArticle)
                 if symbol:
                     query = query.filter(NewsArticle.symbols_mentioned.contains(symbol))
-                articles = query.order_by(NewsArticle.published_date.desc()).limit(limit).all()
+                articles = (
+                    query.order_by(NewsArticle.published_date.desc()).limit(limit).all()
+                )
                 return [
                     {
                         "id": str(article.id),
@@ -714,7 +830,9 @@ class DatabaseManager:
                 )
             return True
         except Exception as exc:
-            logger.warning("Failed to store fundamental analysis", symbol=symbol, error=str(exc))
+            logger.warning(
+                "Failed to store fundamental analysis", symbol=symbol, error=str(exc)
+            )
             return False
 
     def get_fundamental_analysis(
@@ -725,10 +843,18 @@ class DatabaseManager:
     ) -> List[Dict[str, Any]]:
         try:
             with get_db_session() as session:
-                query = session.query(FundamentalAnalysis).filter(FundamentalAnalysis.symbol == symbol)
+                query = session.query(FundamentalAnalysis).filter(
+                    FundamentalAnalysis.symbol == symbol
+                )
                 if analysis_type:
-                    query = query.filter(FundamentalAnalysis.analysis_type == analysis_type)
-                analyses = query.order_by(FundamentalAnalysis.created_at.desc()).limit(limit).all()
+                    query = query.filter(
+                        FundamentalAnalysis.analysis_type == analysis_type
+                    )
+                analyses = (
+                    query.order_by(FundamentalAnalysis.created_at.desc())
+                    .limit(limit)
+                    .all()
+                )
                 return [
                     {
                         "id": str(analysis.id),
@@ -741,7 +867,9 @@ class DatabaseManager:
                     for analysis in analyses
                 ]
         except Exception as exc:
-            logger.warning("Failed to get fundamental analysis", symbol=symbol, error=str(exc))
+            logger.warning(
+                "Failed to get fundamental analysis", symbol=symbol, error=str(exc)
+            )
             return []
 
 
