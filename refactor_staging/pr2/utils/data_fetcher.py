@@ -146,12 +146,22 @@ class DataFetcher:
 
     @log_execution_time()
     def get_bond_data(self, symbol: str) -> Optional[Dict[str, Any]]:
-        history = self._download_history(symbol, "5d")
+        try:
+            normalized_symbol = self._validate_symbol(symbol)
+        except ValidationError as exc:
+            logger.warning("Symbol validation failed", symbol=symbol, error=str(exc))
+            return None
+
+        history = self._download_history(normalized_symbol, "5d")
         if history.empty:
             return None
         current_yield = float(history["Close"].iloc[-1])
         prev_yield = float(history["Close"].iloc[-2]) if len(history) > 1 else current_yield
-        return {"symbol": symbol, "price": current_yield, "change": current_yield - prev_yield}
+        return {
+            "symbol": normalized_symbol,
+            "price": current_yield,
+            "change": current_yield - prev_yield,
+        }
 
     @st.cache_data(ttl=1800)
     @log_execution_time()
