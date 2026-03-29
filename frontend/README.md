@@ -10,11 +10,12 @@ This directory will contain the MarketPulse Next.js frontend application.
 - **State Management:** TBD (Zustand / React Query)
 - **Charts:** TBD (lightweight-charts / Recharts)
 
-## Setup
+## Setup (planned)
 
-See [docs/getting-started.md](../docs/getting-started.md) for full setup instructions.
+Once the Next.js app is scaffolded in this directory (with `package.json` and scripts), setup will follow [docs/getting-started.md](../docs/getting-started.md).
 
 ```bash
+# Planned commands once the frontend app exists
 npm install
 npm run dev
 ```
