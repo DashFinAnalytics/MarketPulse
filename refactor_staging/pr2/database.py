@@ -8,7 +8,6 @@ from typing import Any, Dict, Generator, List, Optional
 
 from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, create_engine, text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from config import config
