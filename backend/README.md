@@ -11,16 +11,15 @@ This directory will contain the MarketPulse FastAPI backend application.
 - **Cache:** Redis
 - **Worker:** ARQ (async job queue)
 
-## Setup
+## Setup (planned)
 
-See [docs/getting-started.md](../docs/getting-started.md) for full setup instructions.
+See [docs/getting-started.md](../docs/getting-started.md) for full setup instructions once the backend scaffold is added.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+> Note: The backend application code, `requirements.txt`, and FastAPI entrypoint (`app.main:app`) are not yet present in this repository. The exact setup commands will be documented here after the backend is implemented.
+
+
+
+
 
 ## Structure (planned)
 
