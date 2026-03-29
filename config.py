@@ -10,6 +10,8 @@ This module is intentionally conservative:
 from __future__ import annotations
 
 import os
+import secrets
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -40,6 +42,10 @@ def _env_int(name: str, default: int) -> int:
     try:
         return int(value)
     except ValueError:
+        warnings.warn(
+            f"Config: invalid value for {name!r}: {value!r}; using default {default}",
+            stacklevel=2,
+        )
         return default
 
 
@@ -50,6 +56,10 @@ def _env_float(name: str, default: float) -> float:
     try:
         return float(value)
     except ValueError:
+        warnings.warn(
+            f"Config: invalid value for {name!r}: {value!r}; using default {default}",
+            stacklevel=2,
+        )
         return default
 
 
@@ -106,7 +116,9 @@ class AppConfig:
     title: str = field(default_factory=lambda: os.getenv("APP_TITLE", "MarketPulse"))
     streamlit_host: str = field(default_factory=lambda: os.getenv("STREAMLIT_HOST", "0.0.0.0"))
     streamlit_port: int = field(default_factory=lambda: _env_int("STREAMLIT_PORT", 5000))
-    secret_key: str = field(default_factory=lambda: os.getenv("SECRET_KEY", "dev-secret-key-change-me"))
+    # Random per-process default; sessions are invalidated on restart.
+    # Always set SECRET_KEY explicitly in any persistent or production deployment.
+    secret_key: str = field(default_factory=lambda: os.getenv("SECRET_KEY") or secrets.token_hex(32))
     enable_ai_analysis: bool = field(default_factory=lambda: _env_bool("ENABLE_AI_ANALYSIS", True))
     enable_news_fetching: bool = field(default_factory=lambda: _env_bool("ENABLE_NEWS_FETCHING", True))
     enable_real_time_updates: bool = field(default_factory=lambda: _env_bool("ENABLE_REAL_TIME_UPDATES", False))
@@ -143,6 +155,16 @@ class Config:
             self.warnings.append(
                 "ENVIRONMENT=development but DEBUG is false; this is allowed but may hide useful diagnostics."
             )
+
+        if not os.getenv("SECRET_KEY"):
+            if self.app.environment.lower() != "development":
+                self.warnings.append(
+                    "SECRET_KEY is not configured in a non-development environment; this is a security risk."
+                )
+            else:
+                self.warnings.append(
+                    "SECRET_KEY is not set; using a randomly generated per-process key for development."
+                )
 
     def get_warning_summary(self) -> List[str]:
         return list(self.warnings)
