@@ -6,6 +6,7 @@ failing outright when optional dependencies are missing.
 
 from __future__ import annotations
 
+import subprocess
 from typing import Any, Dict
 
 from config import config
@@ -14,6 +15,24 @@ from utils.exceptions import ConfigurationError
 from utils.logging_config import get_logger, setup_logging
 
 logger = get_logger(__name__)
+
+
+def _get_git_sha() -> str:
+    """Return the short git SHA of HEAD, or 'unknown' if unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        return result.stdout.strip() or "unknown"
+    except (subprocess.SubprocessError, FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return "unknown"
+
+
+_APP_VERSION = _get_git_sha()
 
 
 class AppInitializer:
@@ -93,9 +112,9 @@ class AppInitializer:
         health_status: Dict[str, Any] = {}
 
         try:
-            cache.set("health_check", "ok", 10)
-            health_status["cache"] = cache.get("health_check") == "ok"
-            cache.delete("health_check")
+            cache.set("__app_init_health_check__", "ok", 10)
+            health_status["cache"] = cache.get("__app_init_health_check__") == "ok"
+            cache.delete("__app_init_health_check__")
         except Exception as exc:
             logger.warning("Cache health check failed", error=str(exc))
             health_status["cache"] = False
@@ -118,7 +137,7 @@ class AppInitializer:
 
     def get_system_info(self) -> Dict[str, Any]:
         return {
-            "app_version": "pr1-scaffold",
+            "app_version": _APP_VERSION,
             "environment": config.app.environment,
             "initialization_status": self.initialization_status,
             "features": {
