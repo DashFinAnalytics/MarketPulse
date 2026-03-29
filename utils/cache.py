@@ -92,7 +92,7 @@ def cached(ttl: Optional[int] = None, key_func: Optional[Callable[..., str]] = N
                     args_hash = hashlib.sha256(
                         pickle.dumps((args, sorted(kwargs.items())))
                     ).hexdigest()
-                except (pickle.PickleError, TypeError) as exc:
+                except (pickle.PickleError, TypeError, AttributeError) as exc:
                     _log.warning(
                         "cache: pickle serialisation failed for %s; falling back to repr. Error: %s",
                         func_id,
