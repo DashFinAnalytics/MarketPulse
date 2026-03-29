@@ -132,9 +132,16 @@ def setup_logging() -> None:
     root_logger.addHandler(console_handler)
 
     if not config.app.debug:
-        file_handler = logging.FileHandler("marketpulse.log")
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
+        try:
+            file_handler = logging.FileHandler("marketpulse.log")
+        except OSError as exc:
+            root_logger.warning(
+                "File logging disabled: could not open log file 'marketpulse.log': %s",
+                exc,
+            )
+        else:
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
 
     if config.app.debug:
         ui_handler = StreamlitLogHandler()
