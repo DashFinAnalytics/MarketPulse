@@ -122,6 +122,21 @@ class StreamlitLogHandler(logging.Handler):
 
 def setup_logging() -> None:
     root_logger = logging.getLogger()
+
+    # Clean up any existing handlers to avoid leaking file descriptors when
+    # setup_logging is called multiple times (e.g., Streamlit reloads).
+    for handler in list(root_logger.handlers):
+        try:
+            # Not all handlers implement flush(), so guard with hasattr.
+            if hasattr(handler, "flush"):
+                handler.flush()  # type: ignore[call-arg]
+        except Exception:
+            # Swallow errors during cleanup to avoid breaking logging setup.
+            pass
+        try:
+            handler.close()
+        except Exception:
+            pass
     root_logger.handlers.clear()
     root_logger.setLevel(getattr(logging, config.app.log_level.upper(), logging.INFO))
 
