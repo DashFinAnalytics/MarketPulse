@@ -39,11 +39,13 @@ def _env_int(name: str, default: int) -> int:
     value = os.getenv(name)
     if value is None:
         return default
+
     try:
-        return int(value)
-    except ValueError:
+        return int(value.strip())
+    except (TypeError, ValueError):
         warnings.warn(
-            f"Config: invalid value for {name!r}: {value!r}; using default {default}",
+            f"Invalid integer for environment variable {name!r}: {value!r}. Using default {default}.",
+            RuntimeWarning,
             stacklevel=2,
         )
         return default
@@ -53,11 +55,13 @@ def _env_float(name: str, default: float) -> float:
     value = os.getenv(name)
     if value is None:
         return default
+
     try:
-        return float(value)
-    except ValueError:
+        return float(value.strip())
+    except (TypeError, ValueError):
         warnings.warn(
-            f"Config: invalid value for {name!r}: {value!r}; using default {default}",
+            f"Invalid float for environment variable {name!r}: {value!r}. Using default {default}.",
+            RuntimeWarning,
             stacklevel=2,
         )
         return default
