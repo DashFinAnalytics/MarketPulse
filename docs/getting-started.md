@@ -57,19 +57,29 @@ Edit `.env` to configure your local environment (API keys, database credentials,
 
 > **Never commit `.env` files or secrets to source control.**
 
-### 3. Start all services with Docker Compose
+### 3. Start the backend and frontend
+
+You can run the backend and frontend directly on your machine.
+
+> **Note:** A Docker Compose setup for all services (database, cache, backend, frontend, worker) is planned but not yet included in this repository. Until then, use the manual setup below.
+
+In one terminal, start the backend:
 
 ```bash
-docker compose up --build
+cd backend
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
 ```
 
-This will start:
+In a second terminal, start the frontend:
 
-- PostgreSQL + TimescaleDB
-- Redis
-- FastAPI backend
-- Next.js frontend
-- Background worker
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 ### 4. Access the application
 
@@ -128,22 +138,28 @@ pytest
 
 ## Stopping Services
 
-```bash
-docker compose down
-```
+To stop the development servers, press `Ctrl+C` in each terminal where `uvicorn` or `npm run dev` is running.
 
-To also remove volumes (database data):
+If you created a Python virtual environment for the backend, you can deactivate it with:
 
 ```bash
-docker compose down -v
+deactivate
 ```
+
+---
+
+## Planned Docker Compose setup
+
+A Docker Compose configuration for running all services (PostgreSQL + TimescaleDB, Redis, FastAPI backend, Next.js frontend, and the background worker) is planned but **not yet included** in this repository.
+
+Once available, it will allow you to start the full stack with a single command, and these docs will be updated with exact `docker compose` instructions.
 
 ---
 
 ## Troubleshooting
 
 - **Port conflicts:** Ensure ports 3000, 8000, 5432, and 6379 are not already in use.
-- **Database migrations:** Run `alembic upgrade head` inside the backend container if migrations are pending.
+- **Database migrations:** Run `alembic upgrade head` inside the backend environment if migrations are pending.
 - **Environment variables:** Verify your `.env` file contains all required variables listed in `.env.example`.
 
 ---
