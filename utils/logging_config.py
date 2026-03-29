@@ -123,33 +123,27 @@ class StreamlitLogHandler(logging.Handler):
 def setup_logging() -> None:
     root_logger = logging.getLogger()
 
-    # Clean up any existing handlers to avoid leaking file descriptors when
-    # setup_logging is called multiple times (e.g., Streamlit reloads).
     for handler in list(root_logger.handlers):
         try:
-            # Not all handlers implement flush(), so guard with hasattr.
             if hasattr(handler, "flush"):
                 handler.flush()  # type: ignore[call-arg]
         except Exception as exc:
-            # Swallow errors during cleanup to avoid breaking logging setup,
-            # but emit a best-effort diagnostic so issues are still observable.
-            print(
-                f"Warning: failed to flush logging handler {handler!r}: {exc}",
-                file=sys.stderr,
-            )
+            root_logger.debug("Failed to flush log handler during cleanup: %s", exc)
+
         try:
             handler.close()
         except Exception as exc:
-            # As above, do not let handler-close failures break logging setup,
-            # but surface them on stderr for debugging.
-            print(
-                f"Warning: failed to close logging handler {handler!r}: {exc}",
-                file=sys.stderr,
-            )
-    root_logger.handlers.clear()
-    root_logger.setLevel(getattr(logging, config.app.log_level.upper(), logging.INFO))
+            root_logger.debug("Failed to close log handler during cleanup: %s", exc)
 
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        root_logger.removeHandler(handler)
+
+    root_logger.setLevel(
+        getattr(logging, config.app.log_level.upper(), logging.INFO)
+    )
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
@@ -176,3 +170,4 @@ def setup_logging() -> None:
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("yfinance").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.INFO)
+
