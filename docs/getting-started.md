@@ -104,19 +104,19 @@ The frontend dev server runs on `http://localhost:3000` with hot reload.
 
 ---
 
-## Backend Development
+## Backend Development (planned)
 
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+Backend layout and setup commands are still being finalized for this repository.
+For the most up-to-date backend instructions, see the backend README:
 
-The API server runs on `http://localhost:8000` with auto-reload.
+- [`backend/README.md`](../backend/README.md)
+
+Once the backend structure is stable, this section will be updated with concrete setup commands.
 
 ---
+
+## Running Tests
+
 
 ## Running Tests
 
