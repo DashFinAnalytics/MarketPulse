@@ -28,7 +28,11 @@ jobs:
         run: |
           python -m compileall .
 
-      - name: Smoke import scaffold modules
+- name: Smoke import scaffold modules
+        env:
+          ENVIRONMENT: test
+          ENABLE_DATABASE: false
+          ENABLE_AI_ANALYSIS: false
         run: |
           python - <<'PY'
           from config import config
