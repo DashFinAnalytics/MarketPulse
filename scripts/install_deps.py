@@ -36,6 +36,19 @@ def _in_virtualenv() -> bool:
 
 
 def main() -> int:
+    """
+    Entry point for the dependency installation script.
+
+    Ensures packages are installed in a virtual environment to prevent
+    polluting the system Python interpreter. The check can be bypassed
+    via CLI flags or environment variables.
+
+    Returns:
+        int: Exit code 0 for success, 1 for environment errors.
+
+    Environment Variables:
+        INSTALL_DEPS_FORCE: Set to "1" to bypass the virtualenv check.
+    """
     force = "--force" in sys.argv[1:] or os.environ.get("INSTALL_DEPS_FORCE") == "1"
 
     if not _in_virtualenv() and not force:
