@@ -22,7 +22,7 @@ jobs:
 
       - name: Upgrade pip and install project dependencies
         run: |
-          python scripts/install_deps.py
+          python scripts/install_deps.py --force
 
       - name: Compile Python sources
         run: |
