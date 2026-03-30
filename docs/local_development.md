@@ -56,8 +56,16 @@ second dependency source of truth too early.
 
 ## 5. Configure environment values
 
-Copy `.env.example` to `.env` and fill in only what you need.
+Copy `.env.example` to `.env` and fill in only what you need. This file is a
+convenience for managing environment variables; the app ultimately reads values
+from the environment provided by your shell or editor.
 
+By default, `scripts/install_deps.py` does **not** install `python-dotenv`, so
+the app will not automatically load `.env` unless you either:
+- configure VS Code to use `.env` as an `envFile`, or
+- export the variables from `.env` in your shell, or
+- manually install `python-dotenv` in your virtualenv (e.g. `pip install python-dotenv`)
+  and enable its use in your local config.
 At minimum, the app should be able to run without database or OpenAI keys if
 those services are left unconfigured.
 
