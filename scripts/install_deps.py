@@ -20,7 +20,14 @@ from pathlib import Path
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
-    raise SystemExit("Python 3.11+ is required to read pyproject.toml with tomllib.")
+    # Attempt to use the tomli backport for older Python versions
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:
+        raise SystemExit(
+            "Unable to read pyproject.toml. Please install 'tomli' for Python <3.11 "
+            "(pip install tomli) or upgrade to Python 3.11+."
+        )
 
 
 def _in_virtualenv() -> bool:
