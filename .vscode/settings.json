@@ -17,22 +17,4 @@
       ".mypy_cache": true,
       ".ruff_cache": true
     }
-  }
-  "python.terminal.activateEnvironment": true,
-  "python.analysis.typeCheckingMode": "basic",
-  "python.analysis.autoImportCompletions": true,
-  "files.exclude": {
-    "**/__pycache__": true,
-    ".venv": true,
-    ".pytest_cache": true,
-    ".mypy_cache": true,
-    ".ruff_cache": true
-  },
-  "search.exclude": {
-    "**/__pycache__": true,
-    ".venv": true,
-    ".pytest_cache": true,
-    ".mypy_cache": true,
-    ".ruff_cache": true
-  }
 }
