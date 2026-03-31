@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python 3.11
         # Replace the placeholder below with the full commit SHA for the v5 release you want to pin.
         # I do not want to guess this SHA and give you a wrong immutable pin.
-        uses: actions/setup-python@<FULL_LENGTH_V5_COMMIT_SHA>
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
