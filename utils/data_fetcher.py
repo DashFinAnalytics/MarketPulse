@@ -83,15 +83,27 @@ class DataFetcher:
                     self._sleep_before_retry(attempt)
         return pd.DataFrame()
 
-    @st.cache_data(ttl=60)
+    # cached: network only
+    @st.cache_data(ttl=config.api.yfinance_cache_ttl_seconds)
     @log_api_call("Yahoo Finance")
     @log_execution_time()
     def _fetch_ticker_data(_self, symbol: str) -> Optional[Dict[str, Any]]:
-        try:
-            symbol = _self._validate_symbol(symbol)
-        except ValidationError as exc:
-            logger.warning("Symbol validation failed", symbol=symbol, error=str(exc))
-            return None
+        symbol = _self._validate_symbol(symbol)
+        ...  # existing retry + fetch logic
+        return data
+    
+    # NOT cached: persistence decision happens here
+    def fetch_ticker_data(
+        self,
+        symbol: str,
+        *,
+        persist: bool = False,
+        data_type: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        data = self._fetch_ticker_data(symbol)
+        if persist and data and data_type:
+            self._store_data_if_possible(self._validate_symbol(symbol), data, data_type)
+        return data
 
         for attempt in range(max(1, _self.retry_attempts)):
             try:
