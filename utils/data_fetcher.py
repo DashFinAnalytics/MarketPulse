@@ -18,6 +18,10 @@ logger = get_logger(__name__)
 
 class DataFetcher:
     def __init__(self) -> None:
+        """Initialize the DataFetcher.
+
+        Reads configuration for Yahoo Finance retry behavior.
+        """
         self.retry_attempts = config.api.yfinance_retry_attempts
 
     def _validate_symbol(self, symbol: str) -> str:
@@ -173,6 +177,15 @@ class DataFetcher:
 
     @log_execution_time()
     def get_indices_data(self, symbols: Sequence[str]) -> Dict[str, Dict[str, Any]]:
+        """Fetch quote/summary data for market indices.
+
+        Args:
+            symbols: Iterable of Yahoo Finance symbols (e.g. ["^GSPC", "^IXIC"]).
+
+        Returns:
+            Mapping of normalized symbol -> ticker data dict containing at least
+            price/change/change_pct/volume/info for each successfully fetched symbol.
+        """
         return self._collect_asset_data(symbols, "index")
 
     @log_execution_time()
@@ -184,6 +197,15 @@ class DataFetcher:
 
     @log_execution_time()
     def get_bond_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch recent bond yield data for a single bond/yield symbol.
+
+        Args:
+            symbol: Yahoo Finance symbol (e.g. "^TNX").
+
+        Returns:
+            Dict with keys "symbol", "price", and "change" if data is available;
+            otherwise None.
+        """
         try:
             normalized_symbol = self._validate_symbol(symbol)
         except ValidationError as exc:
