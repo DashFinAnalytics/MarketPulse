@@ -96,6 +96,15 @@ class DataFetcher:
                 ticker = yf.Ticker(symbol)
                 history = ticker.history(period="2d")
                 if history.empty:
+                    logger.warning(
+                        "Empty history received from Yahoo Finance",
+                        symbol=symbol,
+                        period="2d",
+                        attempt=attempt + 1,
+                    )
+                    if attempt < _self.retry_attempts - 1:
+                        _self._sleep_before_retry(attempt)
+                        continue
                     return None
 
                 try:
