@@ -961,9 +961,8 @@ class DataFetcher:
                 return (
                     -(portfolio_return - risk_free) / portfolio_vol
                     if portfolio_vol > 0
-                    else 0.0
+                    else 1e10  # Large penalty to discourage zero-volatility solutions
                 )
-
             constraints = [{"type": "eq", "fun": lambda weights: np.sum(weights) - 1}]
             bounds = [(0, 1)] * count
             starting_weights = np.array([1 / count] * count)
