@@ -109,6 +109,14 @@ def get_engine(force_refresh: bool = False) -> Optional[Engine]:
         logger.warning("Database URL is not configured")
         return None
 
+    if "+asyncpg" in database_url:
+        logger.error(
+            "Async database driver 'asyncpg' is not supported by the synchronous "
+            "SQLAlchemy engine. Please use a synchronous driver such as "
+            "'psycopg2' in DATABASE_URL.",
+            database_url=database_url,
+        )
+        return None
     try:
         engine = create_engine(database_url, **_engine_kwargs())
         logger.info("Database engine initialized")
