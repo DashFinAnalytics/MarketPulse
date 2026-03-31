@@ -954,7 +954,9 @@ class DatabaseManager:
                 query = session.query(NewsArticle)
                 if normalized_symbol:
                     query = query.filter(
-                        NewsArticle.symbols_mentioned.contains(normalized_symbol)
+                        NewsArticle.symbols_mentioned.contains(
+                            json.dumps([normalized_symbol])
+                        )
                     )
 
                 articles = (
