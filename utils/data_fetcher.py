@@ -280,7 +280,7 @@ class DataFetcher:
             if data:
                 movers.append(
                     {
-                        "symbol": symbol,
+                        "symbol": data.get("symbol", symbol),
                         "price": data["price"],
                         "change_pct": data["change_pct"],
                     }
