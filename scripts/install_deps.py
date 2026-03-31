@@ -52,10 +52,21 @@ def main() -> int:
     force = "--force" in sys.argv[1:] or os.environ.get("INSTALL_DEPS_FORCE") == "1"
 
     if not _in_virtualenv() and not force:
+        if os.name == "nt":
+            activation_hint = (
+                "Activate a venv first (e.g. `\\.venv\\Scripts\\Activate.ps1` for PowerShell "
+                "or `.venv\\Scripts\\activate.bat` for CMD) to avoid\n"
+                "installing packages into the system Python interpreter.\n"
+            )
+        else:
+            activation_hint = (
+                "Activate a venv first (e.g. `source .venv/bin/activate`) to avoid\n"
+                "installing packages into the system Python interpreter.\n"
+            )
+
         print(
             "ERROR: No active virtual environment detected.\n"
-            "Activate a venv first (e.g. `source .venv/bin/activate`) to avoid\n"
-            "installing packages into the system Python interpreter.\n"
+            f"{activation_hint}"
             "\n"
             "To bypass this check, run with --force or set INSTALL_DEPS_FORCE=1.",
             file=sys.stderr,
