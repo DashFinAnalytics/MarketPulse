@@ -386,24 +386,24 @@ class DatabaseManager:
                     .order_by(FinancialData.timestamp.desc())
                     .all()
                 )
-                return [
-                    {
-                        "symbol": record.symbol,
-                        "price": record.price,
-                        "change": record.change,
-                        "change_pct": record.change_pct,
-                        "volume": record.volume,
-                        "timestamp": record.timestamp,
-                    }
-                    for record in records
-                ]
+            return [
+                {
+                    "symbol": r.symbol,
+                    "price": r.price,
+                    "change": r.change,
+                    "change_pct": r.change_pct,
+                    "volume": r.volume,
+                    "timestamp": r.timestamp,
+                }
+                for r in records
+            ]
+        except DatabaseError:
+            # preserve existing DB errors from get_db_session
+            raise
         except Exception as exc:
-            logger.warning(
-                "Historical data unavailable from database",
-                symbol=normalized_symbol,
-                error=str(exc),
-            )
-            return []
+            raise DatabaseError(
+                f"Failed to load historical data for {normalized_symbol}"
+            ) from exc
 
     def save_user_preferences(
         self,
