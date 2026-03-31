@@ -23,20 +23,18 @@ class DataFetcher:
     def _validate_symbol(self, symbol: str) -> str:
         if not symbol or not isinstance(symbol, str):
             raise ValidationError("Symbol must be a non-empty string")
-
+    
         normalized = symbol.strip().upper()
-        clean_symbol = (
-            normalized.replace(".", "")
-            .replace("-", "")
-            .replace("^", "")
-            .replace("=", "")
-            .replace("/", "")
-            .replace("_", "")
-        )
-
-        if not clean_symbol.isalnum():
-            raise ValidationError(f"Invalid symbol format: {symbol}")
-
+    
+        # More permissive validation for financial symbols
+        # Allow common financial symbol patterns
+        if not normalized or normalized.isspace():
+            raise ValidationError(f"Symbol cannot be empty or whitespace: {symbol}")
+    
+        # Basic sanity check - symbols shouldn't be excessively long
+        if len(normalized) > 50:
+            raise ValidationError(f"Symbol too long: {symbol}")
+    
         return normalized
 
     def _sleep_before_retry(self, attempt: int) -> None:
@@ -905,7 +903,11 @@ class DataFetcher:
                     "change_pct": data["change_pct"],
                 }
             )
-        gainers = sorted(movers, key=lambda item: item["change_pct"], reverse=True)[:limit]
+        gainers = sorted(
+            movers,
+            key=lambda item: item["change_pct"],
+            reverse=True,
+        )[:limit]
         losers = sorted(movers, key=lambda item: item["change_pct"])[:limit]
         return {"gainers": gainers, "losers": losers}
 
