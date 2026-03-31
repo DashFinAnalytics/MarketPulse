@@ -281,7 +281,15 @@ class FundamentalAnalysis(Base):
 
 
 class DatabaseManager:
+    """High-level interface for database operations used by the app."""
+    
     def create_tables(self) -> bool:
+        """Create all database tables if a database engine is available.
+
+        Returns:
+            bool: True if tables were created successfully, False if the database is
+            unavailable or table creation failed.
+        """
         try:
             db_engine = get_engine()
             if db_engine is None:
@@ -298,10 +306,20 @@ class DatabaseManager:
             return False
 
     def get_session(self) -> Optional[Session]:
+        """Create a new SQLAlchemy session using the configured session factory.
+
+        Returns:
+            Optional[Session]: A new Session if the database is configured, otherwise None.
+        """
         factory = get_session_factory()
         return factory() if factory is not None else None
 
     def health_check(self) -> bool:
+        """Verify database connectivity by executing a simple query.
+
+        Returns:
+            bool: True if the database query succeeds, otherwise False.
+        """
         try:
             with get_db_session() as session:
                 session.execute(text("SELECT 1"))
@@ -316,6 +334,16 @@ class DatabaseManager:
         data: Dict[str, Any],
         data_type: str,
     ) -> bool:
+        """Persist a single market data snapshot for a symbol.
+
+        Args:
+            symbol: Ticker symbol to store (will be normalized, e.g. uppercased/trimmed).
+            data: Market payload containing fields like price, change, change_pct, volume.
+            data_type: Category label for the record (e.g. "index", "commodity", "vix").
+
+        Returns:
+            bool: True if the record was persisted, otherwise False.
+        """
         normalized_symbol = _normalize_symbol(symbol)
 
         try:
