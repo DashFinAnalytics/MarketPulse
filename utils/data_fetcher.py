@@ -242,6 +242,8 @@ class DataFetcher:
             "symbol": normalized_symbol,
             "price": current_yield,
             "change": current_yield - prev_yield,
+            "change_pct": ((current_yield - prev_yield) / prev_yield * 100) if prev_yield != 0 else 0.0,
+            "volume": 0.0,  # Bonds typically don't have volume via yfinance
         }
 
     @st.cache_data(ttl=1800)
