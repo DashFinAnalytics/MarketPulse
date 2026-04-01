@@ -1,9 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
-from datetime import datetime
-import json
 
 from utils.fundamentals import fundamentals_fetcher
 from utils.ai_valuation import ai_valuation_analyzer

@@ -1,9 +1,6 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import yfinance as yf
-import plotly.graph_objects as go
-import plotly.express as px
 from datetime import datetime, timedelta
 import time
 import logging
@@ -11,7 +8,7 @@ from utils.data_fetcher import DataFetcher
 from utils.charts import (
     create_price_chart, create_performance_chart, create_enhanced_price_chart,
     create_chart_from_db_data, create_vix_interpretation_chart, create_yield_curve_chart,
-    create_correlation_heatmap, create_volume_chart, create_risk_metrics_chart,
+    create_correlation_heatmap, create_risk_metrics_chart,
     create_drawdown_chart, create_rolling_volatility_chart,
     create_options_oi_chart, create_options_iv_smile,
     create_forex_heatmap, create_futures_comparison_chart,
@@ -25,13 +22,12 @@ from utils.charts import (
 from utils.intervals import FinanceIntervals
 from utils.news_fetcher import news_fetcher
 from utils.market_status import get_market_status, get_major_market_hours
-from utils.trend_signals import compute_trend_signal, batch_trend_signals, TIMEFRAME_DAYS
+from utils.trend_signals import batch_trend_signals, TIMEFRAME_DAYS
 from utils.sec_fetcher import search_filings, get_company_filings, get_insider_transactions
 from utils.backtester import (run_sma_crossover, run_rsi_strategy,
                                run_bollinger_band_strategy, run_buy_and_hold,
                                run_monte_carlo)
 from database import db_manager
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +57,7 @@ def get_data_fetcher():
 # Initialize database (don't fail app if it errors)
 try:
     db_initialized = initialize_database()
-except:
+except Exception:
     db_initialized = False
 
 data_fetcher = get_data_fetcher()
@@ -1348,9 +1344,13 @@ elif page == "Technical Analysis":
         use_ema20  = st.checkbox("EMA 20",  value=True)
 
     sma_list = []
-    if use_sma20:  sma_list.append(20)
-    if use_sma50:  sma_list.append(50)
-    if use_sma200: sma_list.append(200)
+if use_sma20:
+    sma_list.append(20)
+if use_sma50:
+    sma_list.append(50)
+if use_sma200:
+    sma_list.append(200)
+
 
     if ta_symbol:
         with st.spinner(f"Building technical chart for {ta_symbol}…"):

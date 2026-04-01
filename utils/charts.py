@@ -2,9 +2,9 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+
 import yfinance as yf
-import streamlit as st
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -481,13 +481,20 @@ def create_technical_analysis_chart(symbol, period="3mo", interval="1d",
 
         # ── Subplot layout ─────────────────────────────────
         rows, heights = 1, [0.5]
-        if show_volume: rows += 1; heights.append(0.1)
-        if show_rsi:    rows += 1; heights.append(0.15)
-        if show_macd:   rows += 1; heights.append(0.2)
+        if show_volume:
+            rows += 1
+            heights.append(0.1)
+        if show_rsi:
+            rows += 1
+            heights.append(0.15)
+        if show_macd:
+            rows += 1
+            heights.append(0.2)
 
-        specs = [[{"secondary_y": False}]] * rows
+
         row_titles = ['']
-        if show_volume: row_titles.append('Volume')
+        if show_volume:
+            row_titles.append('Volume')
         if show_rsi:    row_titles.append('RSI')
         if show_macd:   row_titles.append('MACD')
 

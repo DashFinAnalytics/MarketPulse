@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 import streamlit as st
 
 # Note: Using the blueprint:python_openai integration

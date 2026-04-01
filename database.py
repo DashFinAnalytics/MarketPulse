@@ -2,7 +2,6 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
-import pandas as pd
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -316,7 +315,7 @@ class DatabaseManager:
         try:
             session = self.get_session()
             
-            query = session.query(MarketAlerts).filter(MarketAlerts.is_active == True)
+            query = session.query(MarketAlerts).filter(MarketAlerts.is_active)
             if user_id:
                 query = query.filter(MarketAlerts.user_id == user_id)
             
