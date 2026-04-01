@@ -967,9 +967,9 @@ class DatabaseManager:
                         source=article["source"],
                         author=article.get("author", ""),
                         published_date=article["published"],
-                        "symbols_mentioned": _safe_json_loads(
-                            article.symbols_mentioned,
-                            [],
+                        symbols_mentioned=_safe_json_dumps(
+                            article.get("symbols_mentioned", []),
+                            "[]",
                         ),
                         sector=article.get("sector", ""),
                         sentiment=article.get("sentiment", "neutral"),
