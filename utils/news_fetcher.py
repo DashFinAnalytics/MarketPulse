@@ -1,11 +1,8 @@
-import requests
 import feedparser
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Dict, Optional
 import streamlit as st
-from urllib.parse import quote_plus
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +189,7 @@ class FinanceNewsFetcher:
             articles = self.get_market_news(limit=50)
             
             # Extract keywords and count frequency
-            keyword_counts = {}
+            keyword_counts: Dict[str, int] = {}
             common_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'a', 'an'}
             
             for article in articles:

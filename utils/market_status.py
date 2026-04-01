@@ -2,7 +2,7 @@
 Market status detection — open/closed/pre-market/after-hours
 """
 from datetime import datetime, time as dtime
-import pytz
+import pytz  # type: ignore[import-untyped]
 import logging
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,6 @@ def _status(status, label, color, is_open, session):
 def get_major_market_hours():
     """Returns a summary of each major market's status."""
     et = pytz.timezone('America/New_York')
-    now = datetime.now(et)
     now_utc = datetime.now(pytz.utc)
     markets = {
         'NYSE / NASDAQ': {'tz': 'America/New_York',    'open': (9, 30),  'close': (16, 0)},

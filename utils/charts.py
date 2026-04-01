@@ -495,8 +495,10 @@ def create_technical_analysis_chart(symbol, period="3mo", interval="1d",
         row_titles = ['']
         if show_volume:
             row_titles.append('Volume')
-        if show_rsi:    row_titles.append('RSI')
-        if show_macd:   row_titles.append('MACD')
+        if show_rsi:
+            row_titles.append('RSI')
+        if show_macd:
+            row_titles.append('MACD')
 
         fig = make_subplots(rows=rows, cols=1, shared_xaxes=True,
                             vertical_spacing=0.03, row_heights=heights)
@@ -549,10 +551,6 @@ def create_technical_analysis_chart(symbol, period="3mo", interval="1d",
 
         # ── RSI ────────────────────────────────────────────
         if show_rsi:
-            rsi_colors = [
-                'green' if v < 30 else ('red' if v > 70 else 'royalblue')
-                for v in rsi.fillna(50)
-            ]
             fig.add_trace(go.Scatter(x=hist.index, y=rsi,
                                       mode='lines', name='RSI(14)',
                                       line=dict(color='royalblue', width=1.5)),
@@ -652,7 +650,7 @@ def create_crypto_market_chart(crypto_data):
             return None
         labels  = list(crypto_data.keys())
         changes = [crypto_data[s]['change_pct'] for s in labels]
-        clean   = [l.replace('-USD', '') for l in labels]
+        clean   = [label.replace('-USD', '') for label in labels]
         fig = go.Figure(go.Bar(
             x=clean, y=changes,
             marker_color=['green' if c >= 0 else 'red' for c in changes],

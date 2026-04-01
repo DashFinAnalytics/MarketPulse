@@ -55,7 +55,7 @@ def compute_trend_signal(_symbol: str, lookback_days: int = 21) -> dict:
         s20      = float(sma20.iloc[-1])  if not pd.isna(sma20.iloc[-1])  else last
         s50      = float(sma50.iloc[-1])  if not pd.isna(sma50.iloc[-1])  else last
         s200     = float(sma200.iloc[-1]) if not pd.isna(sma200.iloc[-1]) else last
-        e20      = float(ema20.iloc[-1])
+
 
         above_sma20  = last > s20
         above_sma50  = last > s50

@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import streamlit as st
-from datetime import datetime, timedelta
+
 import logging
 from database import db_manager
 

@@ -2,7 +2,7 @@
 SEC EDGAR data fetcher — filings browser and insider activity (Form 4).
 All endpoints are free and require no API key.
 """
-import requests
+import requests  # type: ignore[import-untyped]
 import logging
 from datetime import datetime, timedelta
 

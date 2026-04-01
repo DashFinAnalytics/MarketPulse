@@ -140,6 +140,11 @@ class CacheConfig:
     redis_db: int = field(default_factory=lambda: _env_int("REDIS_DB", 0))
 
 
+def _default_secret_key() -> str:
+    v = os.getenv("SECRET_KEY")
+    return v if v else secrets.token_hex(32)
+
+
 @dataclass
 class AppConfig:
     # ENVIRONMENT is checked first for compatibility; APP_ENV is the documented name in .env.example.
@@ -154,7 +159,7 @@ class AppConfig:
     streamlit_port: int = field(default_factory=lambda: _env_int("STREAMLIT_PORT", 5000))
     # Random per-process default; sessions are invalidated on restart.
     # Always set SECRET_KEY explicitly in any persistent or production deployment.
-    secret_key: str = field(default_factory=lambda: os.getenv("SECRET_KEY") or secrets.token_hex(32))
+    secret_key: str = field(default_factory=_default_secret_key)
     enable_ai_analysis: bool = field(default_factory=lambda: _env_bool("ENABLE_AI_ANALYSIS", True))
     enable_news_fetching: bool = field(default_factory=lambda: _env_bool("ENABLE_NEWS_FETCHING", True))
     enable_real_time_updates: bool = field(default_factory=lambda: _env_bool("ENABLE_REAL_TIME_UPDATES", False))

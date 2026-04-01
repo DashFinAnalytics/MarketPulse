@@ -1,12 +1,18 @@
-from datetime import datetime, timedelta
-from typing import Dict, Optional
+from datetime import datetime
+from typing import Dict, Optional, TypedDict
+
+class IntervalConfig(TypedDict):
+    period: str
+    interval: str
+    name: str
+    hours: Optional[float]
 
 class FinanceIntervals:
     """
     Finance industry standard intervals for historical data
     """
     
-    INTERVALS = {
+    INTERVALS: Dict[str, IntervalConfig] = {
         '1m': {'period': '1d', 'interval': '1m', 'name': '1 Minute', 'hours': 0.017},
         '5m': {'period': '5d', 'interval': '5m', 'name': '5 Minutes', 'hours': 0.083},
         '15m': {'period': '5d', 'interval': '15m', 'name': '15 Minutes', 'hours': 0.25},
@@ -30,7 +36,7 @@ class FinanceIntervals:
     }
     
     @classmethod
-    def get_interval_config(cls, interval_key: str) -> Optional[Dict]:
+    def get_interval_config(cls, interval_key: str) -> Optional[IntervalConfig]:
         """Get configuration for a specific interval"""
         return cls.INTERVALS.get(interval_key)
     
