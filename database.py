@@ -1012,7 +1012,7 @@ class DatabaseManager:
                         "published_date": article.published_date,
                         "symbols_mentioned": _safe_json_loads(
                             article.symbols_mentioned,
-                            article.symbols_mentioned,
+                            [],
                         ),
                         "sector": article.sector,
                         "sentiment": article.sentiment,
