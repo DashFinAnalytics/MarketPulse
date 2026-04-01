@@ -89,7 +89,23 @@ class DataFetcher:
     @log_execution_time()
     def _fetch_ticker_data(_self, symbol: str) -> Optional[Dict[str, Any]]:
         symbol = _self._validate_symbol(symbol)
-        ...  # existing retry + fetch logic
+        data: Optional[Dict[str, Any]] = None
+        for attempt in range(max(1, _self.retry_attempts)):
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                if isinstance(info, dict) and info:
+                    data = info
+                    break
+            except Exception as exc:
+                logger.warning(
+                    "Ticker data fetch attempt failed",
+                    symbol=symbol,
+                    attempt=attempt + 1,
+                    error=str(exc),
+                )
+                if attempt < _self.retry_attempts - 1:
+                    _self._sleep_before_retry(attempt)
         return data
     
     # NOT cached: persistence decision happens here
