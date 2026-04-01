@@ -84,7 +84,7 @@ class DataFetcher:
         return pd.DataFrame()
 
     # cached: network only
-    @st.cache_data(ttl=config.api.yfinance_cache_ttl_seconds)
+    @st.cache_data(ttl=config.cache.market_data_ttl)
     @log_api_call("Yahoo Finance")
     @log_execution_time()
     def _fetch_ticker_data(_self, symbol: str) -> Optional[Dict[str, Any]]:
