@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -27,18 +28,21 @@ class DataFetcher:
     def _validate_symbol(self, symbol: str) -> str:
         if not symbol or not isinstance(symbol, str):
             raise ValidationError("Symbol must be a non-empty string")
-    
+
         normalized = symbol.strip().upper()
-    
-        # More permissive validation for financial symbols
-        # Allow common financial symbol patterns
+
         if not normalized or normalized.isspace():
             raise ValidationError(f"Symbol cannot be empty or whitespace: {symbol}")
-    
+
         # Basic sanity check - symbols shouldn't be excessively long
         if len(normalized) > 50:
             raise ValidationError(f"Symbol too long: {symbol}")
-    
+
+        # Only allow characters that appear in real financial symbols:
+        # letters, digits, ^, =, ., -, /
+        if not re.match(r"^[A-Z0-9\^=.\-/]+$", normalized):
+            raise ValidationError(f"Invalid symbol format: {symbol}")
+
         return normalized
 
     def _sleep_before_retry(self, attempt: int) -> None:
@@ -120,62 +124,6 @@ class DataFetcher:
         if persist and data and data_type:
             self._store_data_if_possible(self._validate_symbol(symbol), data, data_type)
         return data
-
-        for attempt in range(max(1, _self.retry_attempts)):
-            try:
-                ticker = yf.Ticker(symbol)
-                history = ticker.history(period="2d")
-                if history.empty:
-                    logger.warning(
-                        "Empty history received from Yahoo Finance",
-                        symbol=symbol,
-                        period="2d",
-                        attempt=attempt + 1,
-                    )
-                    if attempt < _self.retry_attempts - 1:
-                        _self._sleep_before_retry(attempt)
-                        continue
-                    return None
-
-                try:
-                    info = ticker.info or {}
-                except Exception:
-                    info = {}
-
-                current_price = float(history["Close"].iloc[-1])
-                prev_close = (
-                    float(history["Close"].iloc[-2])
-                    if len(history) > 1
-                    else current_price
-                )
-                change = current_price - prev_close
-                change_pct = (change / prev_close) * 100 if prev_close != 0 else 0.0
-                volume = (
-                    float(history["Volume"].iloc[-1])
-                    if "Volume" in history.columns
-                    else 0.0
-                )
-
-                return {
-                    "symbol": symbol,
-                    "price": current_price,
-                    "change": float(change),
-                    "change_pct": float(change_pct),
-                    "volume": volume,
-                    "info": info,
-                }
-            except Exception as exc:
-                logger.warning(
-                    "Ticker fetch attempt failed",
-                    symbol=symbol,
-                    attempt=attempt + 1,
-                    error=str(exc),
-                )
-                if attempt < _self.retry_attempts - 1:
-                    _self._sleep_before_retry(attempt)
-
-        logger.error("Ticker fetch failed after retries", symbol=symbol)
-        return None
 
     def _collect_asset_data(
         self,
