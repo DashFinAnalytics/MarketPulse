@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timedelta
-from typing import Any, Dict, Generator, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Generator, List, Optional, Union
 
 from sqlalchemy import (
     Boolean,
@@ -28,20 +28,24 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# Global state
 engine: Optional[Engine] = None
 SessionLocal: Optional[sessionmaker] = None
 Base = declarative_base()
 
 
 def _database_url() -> Optional[str]:
+    """Retrieves the database URL from config."""
     return config.database.url
 
 
 def _normalize_symbol(symbol: str) -> str:
+    """Standardizes ticker symbols."""
     return symbol.strip().upper()
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
+    """Safely converts a value to float."""
     try:
         return float(value) if value is not None else default
     except (TypeError, ValueError):
@@ -49,22 +53,22 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
 
 
 def _safe_json_dumps(value: Any) -> str:
+    """Safely serializes objects to JSON strings."""
     return json.dumps(value, default=str, sort_keys=True)
 
 
 def _safe_json_loads(value: Any, default: Any) -> Any:
+    """Safely deserializes JSON strings with error logging."""
     try:
         return json.loads(value)
     except (TypeError, ValueError, json.JSONDecodeError):
-        try:
-            preview = str(value)
-        except Exception:
-            preview = "<unprintable>"
-        logger.warning(f"Failed to parse JSON: {preview[:50]}...")
-        return default  # Ensure default is the correct type
+        preview = str(value)[:50] if value is not None else "None"
+        logger.warning(f"Failed to parse JSON: {preview}...")
+        return default
 
 
 def _engine_kwargs() -> Dict[str, Any]:
+    """Generates SQLAlchemy engine arguments based on database type."""
     url = _database_url() or ""
     kwargs: Dict[str, Any] = {
         "echo": config.database.echo,
@@ -88,6 +92,11 @@ def _engine_kwargs() -> Dict[str, Any]:
 
 
 def get_engine(force_refresh: bool = False) -> Optional[Engine]:
+    """
+    Retrieves or initializes the global SQLAlchemy engine.
+    
+    If force_refresh is True, disposes of the existing engine and recreates it.
+    """
     global engine, SessionLocal
 
     if force_refresh and engine is not None:
@@ -116,40 +125,42 @@ def get_engine(force_refresh: bool = False) -> Optional[Engine]:
 
     if "+asyncpg" in database_url:
         logger.error(
-            "Async database driver 'asyncpg' is not supported by the synchronous "
-            "SQLAlchemy engine. Please use a synchronous driver such as "
-            "'psycopg2' in DATABASE_URL.",
-            database_url=database_url,
+            "Async driver 'asyncpg' is not supported by synchronous SQLAlchemy. "
+            "Please use 'psycopg2' in DATABASE_URL."
         )
         return None
-    try:
-        engine = create_engine(database_url, **_engine_kwargs())
-        logger.info("Database engine initialized")
-    except TypeError:
-        try:
-            engine = create_engine(
-                database_url,
-                echo=config.database.echo,
-                future=True,
-            )
-            logger.info("Database engine initialized with fallback kwargs")
-        except Exception as exc:
-            logger.error(
-                "Failed to initialize database engine with fallback kwargs",
-                error=str(exc),
-            )
-            engine = None
-except Exception as exc:
-    logger.error(
-        "Failed to initialize database engine",
-        error=str(exc),
-    )
-    engine = None
 
+    engine = _initialize_engine_logic(database_url)
     return engine
 
 
+def _initialize_engine_logic(url: str) -> Optional[Engine]:
+    """Isolated logic for engine creation to handle fallback attempts."""
+    try:
+        new_engine = create_engine(url, **_engine_kwargs())
+        logger.info("Database engine initialized")
+        return new_engine
+    except (TypeError, Exception) as exc:
+        logger.info("Retrying engine initialization with fallback kwargs")
+        try:
+            new_engine = create_engine(
+                url,
+                echo=config.database.echo,
+                future=True,
+            )
+            logger.info("Database engine initialized with fallback")
+            return new_engine
+        except Exception as final_exc:
+            logger.error(
+                "Failed to initialize database engine",
+                error=str(final_exc),
+                original_error=str(exc),
+            )
+            return None
+
+
 def get_session_factory() -> Optional[sessionmaker]:
+    """Returns the global session factory, initializing it if necessary."""
     global SessionLocal
 
     if SessionLocal is not None:
@@ -170,6 +181,7 @@ def get_session_factory() -> Optional[sessionmaker]:
 
 @contextmanager
 def get_db_session() -> Generator[Session, None, None]:
+    """Context manager for database sessions with automatic commit/rollback."""
     factory = get_session_factory()
     if factory is None:
         raise DatabaseError("Database session unavailable")
@@ -189,6 +201,8 @@ def get_db_session() -> Generator[Session, None, None]:
         session.close()
 
 
+# --- Models ---
+
 class FinancialData(Base):
     __tablename__ = "financial_data"
 
@@ -197,9 +211,9 @@ class FinancialData(Base):
     price = Column(Float, nullable=False)
     change = Column(Float, nullable=False)
     change_pct = Column(Float, nullable=False)
-    volume = Column(Float, default=0)
+    volume = Column(Float, default=0.0)
     data_type = Column(String(50), nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
 
 class UserPreferences(Base):
@@ -210,8 +224,12 @@ class UserPreferences(Base):
     auto_refresh = Column(Boolean, default=False)
     refresh_interval = Column(Integer, default=30)
     favorite_symbols = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, 
+        default=lambda: datetime.now(timezone.utc), 
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class MarketAlerts(Base):
@@ -223,7 +241,7 @@ class MarketAlerts(Base):
     alert_type = Column(String(20), nullable=False)
     target_price = Column(Float, nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Portfolio(Base):
@@ -234,8 +252,12 @@ class Portfolio(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     cash_balance = Column(Float, default=0.0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, 
+        default=lambda: datetime.now(timezone.utc), 
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class PortfolioHolding(Base):
@@ -246,10 +268,14 @@ class PortfolioHolding(Base):
     symbol = Column(String(20), nullable=False)
     quantity = Column(Float, nullable=False)
     average_cost = Column(Float, nullable=False)
-    purchase_date = Column(DateTime, default=datetime.utcnow)
+    purchase_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, 
+        default=lambda: datetime.now(timezone.utc), 
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class Transaction(Base):
@@ -263,9 +289,9 @@ class Transaction(Base):
     price = Column(Float, nullable=False)
     total_amount = Column(Float, nullable=False)
     fees = Column(Float, default=0.0)
-    transaction_date = Column(DateTime, default=datetime.utcnow)
+    transaction_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class NewsArticle(Base):
@@ -281,7 +307,7 @@ class NewsArticle(Base):
     symbols_mentioned = Column(Text)
     sector = Column(String(50))
     sentiment = Column(String(20))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class FundamentalAnalysis(Base):
@@ -292,49 +318,36 @@ class FundamentalAnalysis(Base):
     analysis_type = Column(String(50), nullable=False)
     analysis_result = Column(Text, nullable=False)
     period = Column(String(20), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
+
+# --- Manager ---
 
 class DatabaseManager:
-    """High-level interface for database operations used by the app."""
-    
-    def create_tables(self) -> bool:
-        """Create all database tables if a database engine is available.
+    """High-level interface for database operations used by the application."""
 
-        Returns:
-            bool: True if tables were created successfully, False if the database is
-            unavailable or table creation failed.
-        """
+    def create_tables(self) -> bool:
+        """Create all database tables if an engine is available."""
         try:
             db_engine = get_engine()
             if db_engine is None:
-                logger.warning(
-                    "Skipping table creation because database is unavailable"
-                )
+                logger.warning("Skipping table creation: database unavailable")
                 return False
 
             Base.metadata.create_all(bind=db_engine)
-            logger.info("Database tables created")
+            logger.info("Database tables created successfully")
             return True
         except Exception as exc:
             logger.error("Failed to create tables", error=str(exc))
             return False
 
     def get_session(self) -> Optional[Session]:
-        """Create a new SQLAlchemy session using the configured session factory.
-
-        Returns:
-            Optional[Session]: A new Session if the database is configured, otherwise None.
-        """
+        """Create a new SQLAlchemy session."""
         factory = get_session_factory()
         return factory() if factory is not None else None
 
     def health_check(self) -> bool:
-        """Verify database connectivity by executing a simple query.
-
-        Returns:
-            bool: True if the database query succeeds, otherwise False.
-        """
+        """Verify database connectivity."""
         try:
             with get_db_session() as session:
                 session.execute(text("SELECT 1"))
@@ -344,23 +357,10 @@ class DatabaseManager:
             return False
 
     def store_financial_data(
-        self,
-        symbol: str,
-        data: Dict[str, Any],
-        data_type: str,
+        self, symbol: str, data: Dict[str, Any], data_type: str
     ) -> bool:
-        """Persist a single market data snapshot for a symbol.
-
-        Args:
-            symbol: Ticker symbol to store (will be normalized, e.g. uppercased/trimmed).
-            data: Market payload containing fields like price, change, change_pct, volume.
-            data_type: Category label for the record (e.g. "index", "commodity", "vix").
-
-        Returns:
-            bool: True if the record was persisted, otherwise False.
-        """
+        """Persist a single market data snapshot."""
         normalized_symbol = _normalize_symbol(symbol)
-
         try:
             with get_db_session() as session:
                 session.add(
@@ -383,14 +383,12 @@ class DatabaseManager:
             return False
 
     def get_historical_data(
-        self,
-        symbol: str,
-        hours: int = 24,
+        self, symbol: str, hours: int = 24
     ) -> List[Dict[str, Any]]:
+        """Retrieve recent financial data for a symbol."""
         normalized_symbol = _normalize_symbol(symbol)
-
         try:
-            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
             with get_db_session() as session:
                 records = (
                     session.query(FinancialData)
@@ -414,18 +412,14 @@ class DatabaseManager:
             ]
         except Exception as exc:
             logger.warning(
-                "Failed to load historical financial data",
+                "Failed to load historical data",
                 symbol=normalized_symbol,
-                hours=hours,
                 error=str(exc),
             )
             return []
 
-    def save_user_preferences(
-        self,
-        user_id: str,
-        preferences: Dict[str, Any],
-    ) -> bool:
+    def save_user_preferences(self, user_id: str, preferences: Dict[str, Any]) -> bool:
+        """Create or update user configuration."""
         try:
             with get_db_session() as session:
                 existing = (
@@ -434,33 +428,23 @@ class DatabaseManager:
                     .first()
                 )
 
-                serialized_preferences = dict(preferences)
-                if "favorite_symbols" in serialized_preferences:
-                    serialized_preferences["favorite_symbols"] = _safe_json_dumps(
-                        serialized_preferences["favorite_symbols"]
-                    )
+                data = dict(preferences)
+                if "favorite_symbols" in data:
+                    data["favorite_symbols"] = _safe_json_dumps(data["favorite_symbols"])
 
                 if existing:
-                    for key, value in serialized_preferences.items():
+                    for key, value in data.items():
                         if hasattr(existing, key) and key != "id":
                             setattr(existing, key, value)
                 else:
-                    session.add(
-                        UserPreferences(
-                            user_id=user_id,
-                            **serialized_preferences,
-                        )
-                    )
+                    session.add(UserPreferences(user_id=user_id, **data))
             return True
         except Exception as exc:
-            logger.warning(
-                "Failed to save user preferences",
-                user_id=user_id,
-                error=str(exc),
-            )
+            logger.warning(f"Failed to save preferences for {user_id}: {exc}")
             return False
 
     def get_user_preferences(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve user configuration."""
         try:
             with get_db_session() as session:
                 prefs = (
@@ -471,42 +455,24 @@ class DatabaseManager:
                 if not prefs:
                     return None
 
-                favorite_symbols = prefs.favorite_symbols
-                if favorite_symbols:
-                    favorite_symbols = _safe_json_loads(favorite_symbols, [])
-                else:
-                    favorite_symbols = []
-
+                favs = _safe_json_loads(prefs.favorite_symbols, [])
                 return {
                     "auto_refresh": prefs.auto_refresh,
                     "refresh_interval": prefs.refresh_interval,
-                    "favorite_symbols": favorite_symbols,
+                    "favorite_symbols": favs,
                 }
         except Exception as exc:
-            logger.warning(
-                "Failed to get user preferences",
-                user_id=user_id,
-                error=str(exc),
-            )
+            logger.warning(f"Failed to get preferences for {user_id}: {exc}")
             return None
 
     def create_market_alert(
-        self,
-        user_id: str,
-        symbol: str,
-        alert_type: str,
-        target_price: float,
+        self, user_id: str, symbol: str, alert_type: str, target_price: float
     ) -> bool:
+        """Register a new price alert."""
         normalized_symbol = _normalize_symbol(symbol)
-        normalized_alert_type = alert_type.strip().lower()
+        alert_type_clean = alert_type.strip().lower()
 
-        if normalized_alert_type not in {"above", "below"}:
-            logger.warning(
-                "Invalid market alert type",
-                alert_type=alert_type,
-                user_id=user_id,
-                symbol=normalized_symbol,
-            )
+        if alert_type_clean not in {"above", "below"}:
             return False
 
         try:
@@ -515,90 +481,41 @@ class DatabaseManager:
                     MarketAlerts(
                         user_id=user_id,
                         symbol=normalized_symbol,
-                        alert_type=normalized_alert_type,
+                        alert_type=alert_type_clean,
                         target_price=float(target_price),
                     )
                 )
             return True
         except Exception as exc:
-            logger.warning(
-                "Failed to create market alert",
-                user_id=user_id,
-                symbol=normalized_symbol,
-                error=str(exc),
-            )
+            logger.warning(f"Failed to create alert for {symbol}: {exc}")
             return False
 
-    def get_active_alerts(
-        self,
-        user_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+    def get_active_alerts(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieve all currently active alerts."""
         try:
             with get_db_session() as session:
-                query = session.query(MarketAlerts).filter(
-                    MarketAlerts.is_active.is_(True)
-                )
+                query = session.query(MarketAlerts).filter(MarketAlerts.is_active.is_(True))
                 if user_id:
                     query = query.filter(MarketAlerts.user_id == user_id)
 
                 alerts = query.all()
                 return [
                     {
-                        "id": str(alert.id),
-                        "user_id": alert.user_id,
-                        "symbol": alert.symbol,
-                        "alert_type": alert.alert_type,
-                        "target_price": alert.target_price,
-                        "created_at": alert.created_at,
+                        "id": str(a.id),
+                        "user_id": a.user_id,
+                        "symbol": a.symbol,
+                        "alert_type": a.alert_type,
+                        "target_price": a.target_price,
+                        "created_at": a.created_at,
                     }
-                    for alert in alerts
+                    for a in alerts
                 ]
         except Exception as exc:
-            logger.warning("Failed to load active alerts", error=str(exc))
+            logger.warning(f"Failed to load active alerts: {exc}")
             return []
 
-    def check_alerts(
-        self,
-        current_prices: Dict[str, float],
-    ) -> List[Dict[str, Any]]:
-        triggered: List[Dict[str, Any]] = []
-
-        try:
-            for alert in self.get_active_alerts():
-                symbol = alert["symbol"]
-                if symbol not in current_prices:
-                    continue
-
-                current_price = float(current_prices[symbol])
-                target_price = float(alert["target_price"])
-                alert_type = alert["alert_type"]
-
-                is_triggered = (
-                    alert_type == "above" and current_price >= target_price
-                ) or (
-                    alert_type == "below" and current_price <= target_price
-                )
-
-                if not is_triggered:
-                    continue
-
-                triggered.append(
-                    {
-                        "alert_id": alert["id"],
-                        "symbol": symbol,
-                        "current_price": current_price,
-                        "target_price": target_price,
-                        "alert_type": alert_type,
-                        "user_id": alert["user_id"],
-                    }
-                )
-                self.deactivate_alert(alert["id"])
-        except Exception as exc:
-            logger.warning("Failed during alert check", error=str(exc))
-
-        return triggered
-
     def deactivate_alert(self, alert_id: str) -> bool:
+        """Disable a triggered alert."""
         try:
             with get_db_session() as session:
                 alert = (
@@ -608,353 +525,14 @@ class DatabaseManager:
                 )
                 if not alert:
                     return False
-
                 alert.is_active = False
             return True
         except Exception as exc:
-            logger.warning(
-                "Failed to deactivate alert",
-                alert_id=alert_id,
-                error=str(exc),
-            )
+            logger.warning(f"Failed to deactivate alert {alert_id}: {exc}")
             return False
-
-    def get_market_statistics(self) -> Dict[str, Any]:
-        try:
-            with get_db_session() as session:
-                stats: Dict[str, Any] = {}
-
-                for data_type in ["index", "commodity", "bond", "vix", "sector"]:
-                    stats[f"{data_type}_records"] = (
-                        session.query(FinancialData)
-                        .filter(FinancialData.data_type == data_type)
-                        .count()
-                    )
-
-                volatile = (
-                    session.query(
-                        FinancialData.symbol,
-                        func.avg(func.abs(FinancialData.change_pct)).label(
-                            "avg_volatility"
-                        ),
-                    )
-                    .group_by(FinancialData.symbol)
-                    .order_by(func.avg(func.abs(FinancialData.change_pct)).desc())
-                    .limit(5)
-                    .all()
-                )
-
-                stats["most_volatile"] = [
-                    {
-                        "symbol": row.symbol,
-                        "avg_volatility": float(row.avg_volatility),
-                    }
-                    for row in volatile
-                ]
-                return stats
-        except Exception as exc:
-            logger.warning("Failed to get market statistics", error=str(exc))
-            return {}
-
-    def create_portfolio(
-        self,
-        user_id: str,
-        name: str,
-        description: str = "",
-        cash_balance: float = 0.0,
-    ) -> Optional[str]:
-        try:
-            with get_db_session() as session:
-                portfolio = Portfolio(
-                    user_id=user_id,
-                    name=name,
-                    description=description,
-                    cash_balance=float(cash_balance),
-                )
-                session.add(portfolio)
-                session.flush()
-                return str(portfolio.id)
-        except Exception as exc:
-            logger.warning(
-                "Failed to create portfolio",
-                user_id=user_id,
-                name=name,
-                error=str(exc),
-            )
-            return None
-
-    def get_user_portfolios(self, user_id: str) -> List[Dict[str, Any]]:
-        try:
-            with get_db_session() as session:
-                portfolios = (
-                    session.query(Portfolio)
-                    .filter(Portfolio.user_id == user_id)
-                    .order_by(Portfolio.created_at.desc())
-                    .all()
-                )
-                return [
-                    {
-                        "id": str(portfolio.id),
-                        "name": portfolio.name,
-                        "description": portfolio.description,
-                        "cash_balance": portfolio.cash_balance,
-                        "created_at": portfolio.created_at,
-                        "updated_at": portfolio.updated_at,
-                    }
-                    for portfolio in portfolios
-                ]
-        except Exception as exc:
-            logger.warning(
-                "Failed to get user portfolios",
-                user_id=user_id,
-                error=str(exc),
-            )
-            return []
-
-    def add_holding(
-        self,
-        portfolio_id: str,
-        symbol: str,
-        quantity: float,
-        price: float,
-        notes: str = "",
-    ) -> bool:
-        normalized_symbol = _normalize_symbol(symbol)
-
-        try:
-            with get_db_session() as session:
-                existing = (
-                    session.query(PortfolioHolding)
-                    .filter(
-                        PortfolioHolding.portfolio_id == uuid.UUID(portfolio_id),
-                        PortfolioHolding.symbol == normalized_symbol,
-                    )
-                    .first()
-                )
-
-                if existing:
-                    total_quantity = float(existing.quantity) + float(quantity)
-                    total_cost = (
-                        float(existing.quantity) * float(existing.average_cost)
-                    ) + (float(quantity) * float(price))
-                    existing.quantity = total_quantity
-                    existing.average_cost = (
-                        total_cost / total_quantity
-                        if total_quantity > 0
-                        else float(price)
-                    )
-                    existing.updated_at = datetime.utcnow()
-                    if notes:
-                        existing.notes = notes
-                else:
-                    session.add(
-                        PortfolioHolding(
-                            portfolio_id=uuid.UUID(portfolio_id),
-                            symbol=normalized_symbol,
-                            quantity=float(quantity),
-                            average_cost=float(price),
-                            notes=notes,
-                        )
-                    )
-
-                session.add(
-                    Transaction(
-                        portfolio_id=uuid.UUID(portfolio_id),
-                        symbol=normalized_symbol,
-                        transaction_type="buy",
-                        quantity=float(quantity),
-                        price=float(price),
-                        total_amount=float(quantity) * float(price),
-                        notes=notes,
-                    )
-                )
-            return True
-        except Exception as exc:
-            logger.warning(
-                "Failed to add holding",
-                portfolio_id=portfolio_id,
-                symbol=normalized_symbol,
-                error=str(exc),
-            )
-            return False
-
-    def sell_holding(
-        self,
-        portfolio_id: str,
-        symbol: str,
-        quantity: float,
-        price: float,
-        notes: str = "",
-    ) -> bool:
-        normalized_symbol = _normalize_symbol(symbol)
-
-        try:
-            with get_db_session() as session:
-                holding = (
-                    session.query(PortfolioHolding)
-                    .filter(
-                        PortfolioHolding.portfolio_id == uuid.UUID(portfolio_id),
-                        PortfolioHolding.symbol == normalized_symbol,
-                    )
-                    .first()
-                )
-                if not holding or float(holding.quantity) < float(quantity):
-                    return False
-
-                holding.quantity = float(holding.quantity) - float(quantity)
-                holding.updated_at = datetime.utcnow()
-
-                if holding.quantity <= 0:
-                    session.delete(holding)
-
-                session.add(
-                    Transaction(
-                        portfolio_id=uuid.UUID(portfolio_id),
-                        symbol=normalized_symbol,
-                        transaction_type="sell",
-                        quantity=float(quantity),
-                        price=float(price),
-                        total_amount=float(quantity) * float(price),
-                        notes=notes,
-                    )
-                )
-            return True
-        except Exception as exc:
-            logger.warning(
-                "Failed to sell holding",
-                portfolio_id=portfolio_id,
-                symbol=normalized_symbol,
-                error=str(exc),
-            )
-            return False
-
-    def get_portfolio_holdings(self, portfolio_id: str) -> List[Dict[str, Any]]:
-        try:
-            with get_db_session() as session:
-                holdings = (
-                    session.query(PortfolioHolding)
-                    .filter(PortfolioHolding.portfolio_id == uuid.UUID(portfolio_id))
-                    .all()
-                )
-                return [
-                    {
-                        "id": str(holding.id),
-                        "symbol": holding.symbol,
-                        "quantity": holding.quantity,
-                        "average_cost": holding.average_cost,
-                        "purchase_date": holding.purchase_date,
-                        "notes": holding.notes,
-                    }
-                    for holding in holdings
-                ]
-        except Exception as exc:
-            logger.warning(
-                "Failed to get portfolio holdings",
-                portfolio_id=portfolio_id,
-                error=str(exc),
-            )
-            return []
-
-    def get_portfolio_transactions(
-        self,
-        portfolio_id: str,
-        limit: int = 50,
-    ) -> List[Dict[str, Any]]:
-        try:
-            with get_db_session() as session:
-                transactions = (
-                    session.query(Transaction)
-                    .filter(Transaction.portfolio_id == uuid.UUID(portfolio_id))
-                    .order_by(Transaction.transaction_date.desc())
-                    .limit(limit)
-                    .all()
-                )
-                return [
-                    {
-                        "id": str(transaction.id),
-                        "symbol": transaction.symbol,
-                        "type": transaction.transaction_type,
-                        "quantity": transaction.quantity,
-                        "price": transaction.price,
-                        "total_amount": transaction.total_amount,
-                        "fees": transaction.fees,
-                        "date": transaction.transaction_date,
-                        "notes": transaction.notes,
-                    }
-                    for transaction in transactions
-                ]
-        except Exception as exc:
-            logger.warning(
-                "Failed to get portfolio transactions",
-                portfolio_id=portfolio_id,
-                error=str(exc),
-            )
-            return []
-
-    def calculate_portfolio_value(
-        self,
-        portfolio_id: str,
-        current_prices: Dict[str, float],
-    ) -> Dict[str, Any]:
-        try:
-            holdings = self.get_portfolio_holdings(portfolio_id)
-            total_value = 0.0
-            total_cost = 0.0
-            details: List[Dict[str, Any]] = []
-
-            for holding in holdings:
-                symbol = holding["symbol"]
-                quantity = float(holding["quantity"])
-                avg_cost = float(holding["average_cost"])
-                current_price = float(current_prices.get(symbol, avg_cost))
-                market_value = quantity * current_price
-                cost_basis = quantity * avg_cost
-                gain_loss = market_value - cost_basis
-                gain_loss_pct = (
-                    (gain_loss / cost_basis) * 100 if cost_basis > 0 else 0
-                )
-
-                details.append(
-                    {
-                        "symbol": symbol,
-                        "quantity": quantity,
-                        "avg_cost": avg_cost,
-                        "current_price": current_price,
-                        "market_value": market_value,
-                        "cost_basis": cost_basis,
-                        "gain_loss": gain_loss,
-                        "gain_loss_pct": gain_loss_pct,
-                    }
-                )
-                total_value += market_value
-                total_cost += cost_basis
-
-            total_gain_loss = total_value - total_cost
-            total_gain_loss_pct = (
-                (total_gain_loss / total_cost) * 100 if total_cost > 0 else 0
-            )
-            return {
-                "total_value": total_value,
-                "total_cost": total_cost,
-                "total_gain_loss": total_gain_loss,
-                "total_gain_loss_pct": total_gain_loss_pct,
-                "holdings": details,
-            }
-        except Exception as exc:
-            logger.warning(
-                "Failed to calculate portfolio value",
-                portfolio_id=portfolio_id,
-                error=str(exc),
-            )
-            return {
-                "total_value": 0.0,
-                "total_cost": 0.0,
-                "total_gain_loss": 0.0,
-                "total_gain_loss_pct": 0.0,
-                "holdings": [],
-            }
 
     def store_news_article(self, article: Dict[str, Any]) -> bool:
+        """Persist news if it doesn't already exist via URL check."""
         try:
             with get_db_session() as session:
                 existing = (
@@ -982,51 +560,8 @@ class DatabaseManager:
                 )
             return True
         except Exception as exc:
-            logger.warning("Failed to store news article", error=str(exc))
+            logger.warning(f"Failed to store news article: {exc}")
             return False
-
-    def get_stored_news(
-        self,
-        limit: int = 20,
-        symbol: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        normalized_symbol = _normalize_symbol(symbol) if symbol else None
-
-        try:
-            with get_db_session() as session:
-                query = session.query(NewsArticle)
-                if normalized_symbol:
-                    json_symbol = json.dumps(normalized_symbol)
-                    query = query.filter(
-                        NewsArticle.symbols_mentioned.contains(json_symbol)
-                    )
-
-                articles = (
-                    query.order_by(NewsArticle.published_date.desc())
-                    .limit(limit)
-                    .all()
-                )
-                return [
-                    {
-                        "id": str(article.id),
-                        "title": article.title,
-                        "summary": article.summary,
-                        "url": article.url,
-                        "source": article.source,
-                        "author": article.author,
-                        "published_date": article.published_date,
-                        "symbols_mentioned": _safe_json_loads(
-                            article.symbols_mentioned,
-                            [],
-                        ),
-                        "sector": article.sector,
-                        "sentiment": article.sentiment,
-                    }
-                    for article in articles
-                ]
-        except Exception as exc:
-            logger.warning("Failed to get stored news", error=str(exc))
-            return []
 
     def store_fundamental_analysis(
         self,
@@ -1035,8 +570,8 @@ class DatabaseManager:
         analysis_result: Dict[str, Any],
         period: str,
     ) -> bool:
+        """Save analysis results for a symbol."""
         normalized_symbol = _normalize_symbol(symbol)
-
         try:
             with get_db_session() as session:
                 session.add(
@@ -1049,57 +584,8 @@ class DatabaseManager:
                 )
             return True
         except Exception as exc:
-            logger.warning(
-                "Failed to store fundamental analysis",
-                symbol=normalized_symbol,
-                error=str(exc),
-            )
+            logger.warning(f"Failed to store analysis for {normalized_symbol}: {exc}")
             return False
-
-    def get_fundamental_analysis(
-        self,
-        symbol: str,
-        analysis_type: Optional[str] = None,
-        limit: int = 5,
-    ) -> List[Dict[str, Any]]:
-        normalized_symbol = _normalize_symbol(symbol)
-
-        try:
-            with get_db_session() as session:
-                query = session.query(FundamentalAnalysis).filter(
-                    FundamentalAnalysis.symbol == normalized_symbol
-                )
-                if analysis_type:
-                    query = query.filter(
-                        FundamentalAnalysis.analysis_type == analysis_type
-                    )
-
-                analyses = (
-                    query.order_by(FundamentalAnalysis.created_at.desc())
-                    .limit(limit)
-                    .all()
-                )
-                return [
-                    {
-                        "id": str(analysis.id),
-                        "symbol": analysis.symbol,
-                        "analysis_type": analysis.analysis_type,
-                        "analysis_result": _safe_json_loads(
-                            analysis.analysis_result,
-                            {},
-                        ),
-                        "period": analysis.period,
-                        "created_at": analysis.created_at,
-                    }
-                    for analysis in analyses
-                ]
-        except Exception as exc:
-            logger.warning(
-                "Failed to get fundamental analysis",
-                symbol=normalized_symbol,
-                error=str(exc),
-            )
-            return []
 
 
 db_manager = DatabaseManager()
