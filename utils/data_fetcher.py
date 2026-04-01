@@ -93,24 +93,73 @@ class DataFetcher:
     @log_execution_time()
     def _fetch_ticker_data(_self, symbol: str) -> Optional[Dict[str, Any]]:
         symbol = _self._validate_symbol(symbol)
-        data: Optional[Dict[str, Any]] = None
+    
         for attempt in range(max(1, _self.retry_attempts)):
             try:
                 ticker = yf.Ticker(symbol)
-                info = ticker.info
-                if isinstance(info, dict) and info:
-                    data = info
-                    break
+                history = ticker.history(period="2d")
+    
+                if history.empty:
+                    logger.warning(
+                        "Empty history received from Yahoo Finance",
+                        symbol=symbol,
+                        period="2d",
+                        attempt=attempt + 1,
+                    )
+                    if attempt < _self.retry_attempts - 1:
+                        _self._sleep_before_retry(attempt)
+                        continue
+                    return None
+    
+                try:
+                    info = ticker.info or {}
+                except Exception:
+                    info = {}
+    
+                current_price = float(
+                    info.get("currentPrice")
+                    or info.get("regularMarketPrice")
+                    or history["Close"].iloc[-1]
+                )
+                prev_close = float(
+                    info.get("regularMarketPreviousClose")
+                    or (
+                        history["Close"].iloc[-2]
+                        if len(history) > 1
+                        else current_price
+                    )
+                )
+                change = current_price - prev_close
+                change_pct = (change / prev_close) * 100 if prev_close != 0 else 0.0
+                volume = float(
+                    info.get("regularMarketVolume")
+                    or (
+                        history["Volume"].iloc[-1]
+                        if "Volume" in history.columns
+                        else 0.0
+                    )
+                )
+    
+                return {
+                    "symbol": symbol,
+                    "price": current_price,
+                    "change": float(change),
+                    "change_pct": float(change_pct),
+                    "volume": volume,
+                    "info": info,
+                }
             except Exception as exc:
                 logger.warning(
-                    "Ticker data fetch attempt failed",
+                    "Ticker fetch attempt failed",
                     symbol=symbol,
                     attempt=attempt + 1,
                     error=str(exc),
                 )
                 if attempt < _self.retry_attempts - 1:
                     _self._sleep_before_retry(attempt)
-        return data
+    
+        logger.error("Ticker fetch failed after retries", symbol=symbol)
+        return None
     
     # NOT cached: persistence decision happens here
     def fetch_ticker_data(
