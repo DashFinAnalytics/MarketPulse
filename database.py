@@ -52,11 +52,15 @@ def _safe_json_dumps(value: Any) -> str:
     return json.dumps(value, default=str, sort_keys=True)
 
 
-def _safe_json_loads(value: str, default: Any) -> Any:
+def _safe_json_loads(value: Any, default: Any) -> Any:
     try:
         return json.loads(value)
     except (TypeError, ValueError, json.JSONDecodeError):
-        logger.warning(f"Failed to parse JSON: {value[:50]}...")
+        try:
+            preview = str(value)
+        except Exception:
+            preview = "<unprintable>"
+        logger.warning(f"Failed to parse JSON: {preview[:50]}...")
         return default  # Ensure default is the correct type
 
 
