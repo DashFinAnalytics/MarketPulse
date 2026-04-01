@@ -56,7 +56,8 @@ def _safe_json_loads(value: str, default: Any) -> Any:
     try:
         return json.loads(value)
     except (TypeError, ValueError, json.JSONDecodeError):
-        return default
+        logger.warning(f"Failed to parse JSON: {value[:50]}...")
+        return default  # Ensure default is the correct type
 
 
 def _engine_kwargs() -> Dict[str, Any]:
