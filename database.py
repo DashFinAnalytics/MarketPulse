@@ -398,13 +398,14 @@ class DatabaseManager:
                 }
                 for r in records
             ]
-        except DatabaseError:
-            # preserve existing DB errors from get_db_session
-            raise
         except Exception as exc:
-            raise DatabaseError(
-                f"Failed to load historical data for {normalized_symbol}"
-            ) from exc
+            logger.warning(
+                "Failed to load historical financial data",
+                symbol=normalized_symbol,
+                hours=hours,
+                error=str(exc),
+            )
+            return []
 
     def save_user_preferences(
         self,
