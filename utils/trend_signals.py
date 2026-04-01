@@ -49,7 +49,7 @@ def compute_trend_signal(_symbol: str, lookback_days: int = 21) -> dict:
         sma20  = close.rolling(20).mean()
         sma50  = close.rolling(50).mean()
         sma200 = close.rolling(200).mean()
-        ema20  = close.ewm(span=20, adjust=False).mean()
+
 
         last     = float(close.iloc[-1])
         s20      = float(sma20.iloc[-1])  if not pd.isna(sma20.iloc[-1])  else last

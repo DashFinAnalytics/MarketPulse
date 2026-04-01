@@ -1,7 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import streamlit as st
-from datetime import datetime
+
 import logging
 
 logger = logging.getLogger(__name__)
