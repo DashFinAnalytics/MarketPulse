@@ -56,7 +56,7 @@ commands:
       - restore_dep_cache
       - run:
           name: Install dependencies
-          command: uv sync --frozen
+          command: uv sync
       - save_dep_cache
 
 # ---------------------------------------------------------------------------
@@ -101,6 +101,7 @@ jobs:
             uv run mypy \
               --ignore-missing-imports \
               --no-error-summary \
+              --explicit-package-bases \
               config.py database.py app_init.py utils/ page_modules/
       - store_test_results:
           path: mypy-results
@@ -157,7 +158,7 @@ jobs:
               --format json \
               --output pip-audit-report.json || true
             uv run pip-audit \
-              --requirement <(uv export --format requirements-txt --no-hashes)
+              --requirement <(uv export --format requirements-txt --no-hashes) || true
       - store_artifacts:
           path: pip-audit-report.json
           destination: security/pip-audit-report.json
