@@ -122,15 +122,19 @@ def get_engine(force_refresh: bool = False) -> Optional[Engine]:
         engine = create_engine(database_url, **_engine_kwargs())
         logger.info("Database engine initialized")
     except TypeError:
-        engine = create_engine(
-            database_url,
-            echo=config.database.echo,
-            future=True,
-        )
-        logger.info("Database engine initialized with fallback kwargs")
-    except Exception as exc:
-        logger.error("Failed to initialize database engine", error=str(exc))
-        engine = None
+        try:
+            engine = create_engine(
+                database_url,
+                echo=config.database.echo,
+                future=True,
+            )
+            logger.info("Database engine initialized with fallback kwargs")
+        except Exception as exc:
+            logger.error(
+                "Failed to initialize database engine with fallback kwargs",
+                error=str(exc),
+            )
+            engine = None
 
     return engine
 
@@ -459,10 +463,9 @@ class DatabaseManager:
 
                 favorite_symbols = prefs.favorite_symbols
                 if favorite_symbols:
-                    favorite_symbols = _safe_json_loads(
-                        favorite_symbols,
-                        favorite_symbols,
-                    )
+                    favorite_symbols = _safe_json_loads(favorite_symbols, [])
+                else:
+                    favorite_symbols = []
 
                 return {
                     "auto_refresh": prefs.auto_refresh,
@@ -960,8 +963,9 @@ class DatabaseManager:
                         source=article["source"],
                         author=article.get("author", ""),
                         published_date=article["published"],
-                        symbols_mentioned=_safe_json_dumps(
-                            article.get("symbols_mentioned", "")
+                        "symbols_mentioned": _safe_json_loads(
+                            article.symbols_mentioned,
+                            [],
                         ),
                         sector=article.get("sector", ""),
                         sentiment=article.get("sentiment", "neutral"),
