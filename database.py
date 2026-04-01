@@ -139,6 +139,12 @@ def get_engine(force_refresh: bool = False) -> Optional[Engine]:
                 error=str(exc),
             )
             engine = None
+except Exception as exc:
+    logger.error(
+        "Failed to initialize database engine",
+        error=str(exc),
+    )
+    engine = None
 
     return engine
 
@@ -968,8 +974,7 @@ class DatabaseManager:
                         author=article.get("author", ""),
                         published_date=article["published"],
                         symbols_mentioned=_safe_json_dumps(
-                            article.get("symbols_mentioned", []),
-                            "[]",
+                            article.get("symbols_mentioned", [])
                         ),
                         sector=article.get("sector", ""),
                         sentiment=article.get("sentiment", "neutral"),
