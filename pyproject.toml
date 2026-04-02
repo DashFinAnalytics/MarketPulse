@@ -12,18 +12,13 @@ dependencies = [
     "pandas-market-calendars>=5.3.1.2",
     "plotly>=6.2.0",
     "psycopg2-binary>=2.9.10",
-    "requests>=2.33.0",
+    "requests>=2.32.4",
     "scipy>=1.17.1",
     "sqlalchemy>=2.0.41",
-    "streamlit>=1.54.0",
+    "streamlit>=1.46.1",
     "textblob>=0.19.0",
     "trafilatura>=2.0.0",
     "yfinance>=0.2.64",
-    "urllib3>=2.6.3",
-    "lxml-html-clean>=0.4.4",
-    "pillow>=12.1.1",
-    "protobuf>=6.33.5",
-    "tornado>=6.5.5",
 ]
 
 [project.optional-dependencies]
