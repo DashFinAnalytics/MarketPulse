@@ -73,7 +73,7 @@ jobs:
       - install_deps
       - run:
           name: Run ruff linter
-          command: uv run ruff check .
+          command: uv run ruff check . --output-format=json --output-file=ruff-report.json
       - run:
           name: Check black formatting
           command: uv run black --check --diff .
@@ -119,6 +119,8 @@ jobs:
       - run:
           name: Run pytest with coverage
           command: |
+            mkdir -p test-results/pytest
+            set +e
             uv run pytest \
               --junit-xml=test-results/pytest/results.xml \
               --cov=. \
@@ -126,16 +128,23 @@ jobs:
               --cov-report=term-missing \
               -v \
               tests/
-          # Allow this step to continue even on test failure so reports are collected
-          when: always
+            echo $? > /tmp/pytest-exit-code
+            exit 0
+      
       - store_test_results:
           path: test-results
+      
       - store_artifacts:
           path: coverage.xml
           destination: coverage/coverage.xml
+      
       - store_artifacts:
           path: test-results
           destination: test-results
+      
+      - run:
+          name: Fail job if pytest failed
+          command: exit $(cat /tmp/pytest-exit-code)
 
   # -------------------------------------------------------------------------
   # Security scan: pip-audit for dependency vulnerabilities
