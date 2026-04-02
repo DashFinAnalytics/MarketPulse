@@ -24,6 +24,10 @@ dependencies = [
     "pillow>=12.1.1",
     "protobuf>=6.33.5",
     "tornado>=6.5.5",
+]
+
+[project.optional-dependencies]
+dev = [
     "ruff>=0.6.9",
     "black>=24.10.0",
 ]
