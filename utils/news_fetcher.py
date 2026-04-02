@@ -192,7 +192,7 @@ class FinanceNewsFetcher:
             articles = self.get_market_news(limit=50)
             
             # Extract keywords and count frequency
-            keyword_counts = {}
+            keyword_counts: dict[str, int] = {}
             common_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'a', 'an'}
             
             for article in articles:
