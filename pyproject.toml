@@ -21,7 +21,7 @@ dependencies = [
     "yfinance>=0.2.64",
     "urllib3>=2.6.3",
     "lxml-html-clean>=0.4.4",
-    "pillow>=12.1.1",
+    "pillow>=11.3.0",
     "protobuf>=6.33.5",
     "tornado>=6.5.5",
 ]
