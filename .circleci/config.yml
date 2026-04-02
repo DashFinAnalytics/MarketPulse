@@ -73,35 +73,36 @@ jobs:
       - install_deps
       - run:
           name: Run ruff linter
-          command: uv run ruff check . --output-format=json --output-file=ruff-report.json
+          command: |
+            uv run ruff check .
+            uv run ruff check . --output-format=json --output-file=ruff-report.json
+
       - run:
           name: Check black formatting
           command: uv run black --check --diff .
+      
       - store_artifacts:
           path: ruff-report.json
           destination: lint/ruff-report.json
-          when: on_fail
+          when: always
 
   # -------------------------------------------------------------------------
   # Type check: mypy (static type analysis)
   # -------------------------------------------------------------------------
   type_check:
-    <<: *defaults
-    <<: *python_image
-    steps:
-      - checkout
-      - install_deps
-      - run:
-          name: Install mypy
-          command: uv run pip install mypy --quiet
-      - run:
-          name: Run mypy type checker
-          command: |
-            uv run mypy \
-              --ignore-missing-imports \
-              --no-error-summary \
-              --explicit-package-bases \
-              config.py database.py app_init.py utils/ page_modules/
+  <<: *defaults
+  <<: *python_image
+  steps:
+    - checkout
+    - install_deps
+    - run:
+        name: Run mypy type checker
+        command: |
+          uv run mypy \
+            --ignore-missing-imports \
+            --no-error-summary \
+            --explicit-package-bases \
+            config.py database.py app_init.py utils/ page_modules/
       - store_test_results:
           path: mypy-results
           when: always
@@ -150,25 +151,29 @@ jobs:
   # Security scan: pip-audit for dependency vulnerabilities
   # -------------------------------------------------------------------------
   security_scan:
-    <<: *defaults
-    <<: *python_image
-    steps:
-      - checkout
-      - install_deps
-      - run:
-          name: Audit dependencies
-          command: |
-            set +e
-            uv run pip-audit --requirement <(uv export --format requirements-txt --no-hashes) --format json --output pip-audit-report.json
-            AUDIT_EXIT=$?
-            if [ $AUDIT_EXIT -ne 0 ]; then
-              echo "WARNING: pip-audit found vulnerabilities. See pip-audit-report.json for details."
-              # Optionally print a summary: cat pip-audit-report.json | jq '.vulnerabilities'
-            fi
-      - store_artifacts:
-          path: pip-audit-report.json
-          destination: security/pip-audit-report.json
-          when: always
+  <<: *defaults
+  <<: *python_image
+  steps:
+    - checkout
+    - install_deps
+    - run:
+        name: Audit dependencies
+        command: |
+          touch pip-audit-report.json
+          set +e
+          uv run pip-audit \
+            --requirement <(uv export --format requirements-txt --no-hashes) \
+            --format json \
+            --output pip-audit-report.json
+          AUDIT_EXIT=$?
+          if [ $AUDIT_EXIT -ne 0 ]; then
+            echo "WARNING: pip-audit found vulnerabilities. See pip-audit-report.json for details."
+          fi
+          exit 0
+    - store_artifacts:
+        path: pip-audit-report.json
+        destination: security/pip-audit-report.json
+        when: always
 
   # -------------------------------------------------------------------------
   # Build validation: ensure the app imports cleanly (smoke test)
