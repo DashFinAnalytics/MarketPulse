@@ -1,5 +1,24 @@
 from datetime import datetime, timedelta
 from typing import Dict, Optional
+from typing import TypedDict
+
+
+class IntervalConfig(TypedDict):
+    period: str
+    interval: str
+    name: str
+    hours: float | None
+
+class FinanceIntervals:
+    INTERVALS: dict[str, IntervalConfig] = {
+        "1m": {"period": "1d", "interval": "1m", "name": "1 Minute", "hours": 0.017},
+        # ...
+    }
+
+    @classmethod
+    def get_interval_config(cls, interval_key: str) -> IntervalConfig | None:
+        return cls.INTERVALS.get(interval_key)
+
 
 class FinanceIntervals:
     """
