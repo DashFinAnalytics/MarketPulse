@@ -5,7 +5,7 @@ from typing import Optional, List, Dict
 import pandas as pd
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
@@ -162,12 +162,14 @@ class DatabaseManager:
             logger.info("Database tables created successfully")
         except Exception as e:
             logger.error(f"Error creating tables: {str(e)}")
-            
-    def get_session(self) -> Optional[Session]:
-        """Get database session"""
+
+    class Base(DeclarativeBase):
+        pass
+
+    def get_session(self) -> Session:
         factory = get_session_factory()
         if factory is None:
-            return None
+            raise RuntimeError("Database session factory is unavailable")
         return factory()
     
     def store_financial_data(self, symbol: str, data: Dict, data_type: str):
@@ -740,7 +742,7 @@ class DatabaseManager:
                 session.close()
             return False
     
-    def get_stored_news(self, limit: int = 20, symbol: str = None) -> List[Dict]:
+    def get_stored_news(self, limit: int = 20, symbol: str | None = None) -> List[Dict]:
         """Get stored news articles"""
         try:
             session = self.get_session()
@@ -818,17 +820,16 @@ class DatabaseManager:
             results = []
             for analysis in analyses:
                 # Get the string content if it's a Column object
-                result_str = analysis.analysis_result
-                if hasattr(result_str, 'key'): # It's a Column object or similar
-                    result_str = str(result_str)
+                result_raw = analysis.analysis_result
+                result_str = result_raw if isinstance(result_raw, str) else str(result_raw)
                 
                 results.append({
-                    'id': str(analysis.id),
-                    'symbol': analysis.symbol,
-                    'analysis_type': analysis.analysis_type,
-                    'analysis_result': json.loads(result_str),
-                    'period': analysis.period,
-                    'created_at': analysis.created_at
+                    "id": str(analysis.id),
+                    "symbol": analysis.symbol,
+                    "analysis_type": analysis.analysis_type,
+                    "analysis_result": json.loads(result_str),
+                    "period": analysis.period,
+                    "created_at": analysis.created_at,
                 })
             return results
             
