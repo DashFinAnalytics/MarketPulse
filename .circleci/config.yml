@@ -56,8 +56,7 @@ commands:
       - restore_dep_cache
       - run:
           name: Install dependencies
-          command: uv sync --frozen
-      - save_dep_cache
+          command: uv sync --extra dev
 
 # ---------------------------------------------------------------------------
 # Jobs
