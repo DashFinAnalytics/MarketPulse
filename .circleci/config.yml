@@ -147,17 +147,15 @@ jobs:
       - checkout
       - install_deps
       - run:
-          name: Install pip-audit
-          command: uv run pip install pip-audit --quiet
-      - run:
-          name: Audit dependencies for known vulnerabilities
+          name: Audit dependencies
           command: |
-            uv run pip-audit \
-              --requirement <(uv export --format requirements-txt --no-hashes) \
-              --format json \
-              --output pip-audit-report.json || true
-            uv run pip-audit \
-              --requirement <(uv export --format requirements-txt --no-hashes) || true
+            set +e
+            uv run pip-audit --requirement <(uv export --format requirements-txt --no-hashes) --format json --output pip-audit-report.json
+            AUDIT_EXIT=$?
+            if [ $AUDIT_EXIT -ne 0 ]; then
+              echo "WARNING: pip-audit found vulnerabilities. See pip-audit-report.json for details."
+              # Optionally print a summary: cat pip-audit-report.json | jq '.vulnerabilities'
+            fi
       - store_artifacts:
           path: pip-audit-report.json
           destination: security/pip-audit-report.json
