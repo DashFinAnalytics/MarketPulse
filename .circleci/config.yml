@@ -66,8 +66,7 @@ jobs:
   # Lint: ruff (fast linter) + black (format check)
   # -------------------------------------------------------------------------
   lint:
-    <<: *defaults
-    <<: *python_image
+    <<: [*defaults, *python_image]
     steps:
       - checkout
       - install_deps
@@ -76,11 +75,9 @@ jobs:
           command: |
             uv run ruff check .
             uv run ruff check . --output-format=json --output-file=ruff-report.json
-
       - run:
           name: Check black formatting
           command: uv run black --check --diff .
-      
       - store_artifacts:
           path: ruff-report.json
           destination: lint/ruff-report.json
@@ -90,29 +87,26 @@ jobs:
   # Type check: mypy (static type analysis)
   # -------------------------------------------------------------------------
   type_check:
-  <<: *defaults
-  <<: *python_image
-  steps:
-    - checkout
-    - install_deps
-    - run:
-        name: Run mypy type checker
-        command: |
-          uv run mypy \
-            --ignore-missing-imports \
-            --no-error-summary \
-            --explicit-package-bases \
-            config.py database.py app_init.py utils/ page_modules/
+    <<: [*defaults, *python_image]
+    steps:
+      - checkout
+      - install_deps
+      - run:
+          name: Run mypy type checker
+          command: |
+            uv run mypy \
+              --ignore-missing-imports \
+              --no-error-summary \
+              --explicit-package-bases \
+              config.py database.py app_init.py utils/ page_modules/
       - store_test_results:
           path: mypy-results
-          when: always
 
   # -------------------------------------------------------------------------
   # Tests: pytest with coverage
   # -------------------------------------------------------------------------
   test:
-    <<: *defaults
-    <<: *python_image
+    <<: [*defaults, *python_image]
     parallelism: 2
     steps:
       - checkout
@@ -131,18 +125,14 @@ jobs:
               tests/
             echo $? > /tmp/pytest-exit-code
             exit 0
-      
       - store_test_results:
           path: test-results
-      
       - store_artifacts:
           path: coverage.xml
           destination: coverage/coverage.xml
-      
       - store_artifacts:
           path: test-results
           destination: test-results
-      
       - run:
           name: Fail job if pytest failed
           command: exit $(cat /tmp/pytest-exit-code)
@@ -151,36 +141,34 @@ jobs:
   # Security scan: pip-audit for dependency vulnerabilities
   # -------------------------------------------------------------------------
   security_scan:
-  <<: *defaults
-  <<: *python_image
-  steps:
-    - checkout
-    - install_deps
-    - run:
-        name: Audit dependencies
-        command: |
-          touch pip-audit-report.json
-          set +e
-          uv run pip-audit \
-            --requirement <(uv export --format requirements-txt --no-hashes) \
-            --format json \
-            --output pip-audit-report.json
-          AUDIT_EXIT=$?
-          if [ $AUDIT_EXIT -ne 0 ]; then
-            echo "WARNING: pip-audit found vulnerabilities. See pip-audit-report.json for details."
-          fi
-          exit 0
-    - store_artifacts:
-        path: pip-audit-report.json
-        destination: security/pip-audit-report.json
-        when: always
+    <<: [*defaults, *python_image]
+    steps:
+      - checkout
+      - install_deps
+      - run:
+          name: Audit dependencies
+          command: |
+            touch pip-audit-report.json
+            set +e
+            uv run pip-audit \
+              --requirement <(uv export --format requirements-txt --no-hashes) \
+              --format json \
+              --output pip-audit-report.json
+            AUDIT_EXIT=$?
+            if [ $AUDIT_EXIT -ne 0 ]; then
+              echo "WARNING: pip-audit found vulnerabilities. See pip-audit-report.json for details."
+            fi
+            exit 0
+      - store_artifacts:
+          path: pip-audit-report.json
+          destination: security/pip-audit-report.json
+          when: always
 
   # -------------------------------------------------------------------------
   # Build validation: ensure the app imports cleanly (smoke test)
   # -------------------------------------------------------------------------
   smoke_test:
-    <<: *defaults
-    <<: *python_image
+    <<: [*defaults, *python_image]
     steps:
       - checkout
       - install_deps
@@ -201,27 +189,20 @@ workflows:
   # -------------------------------------------------------------------------
   ci:
     jobs:
-      # Lint and type-check run in parallel first; they are fast and cheap.
       - lint:
           filters:
             branches:
-              ignore: []  # all branches
+              ignore: []
       - type_check:
           filters:
             branches:
               ignore: []
-
-      # Tests and smoke test require a clean lint gate before running,
-      # avoiding wasted compute on obviously broken code.
       - test:
           requires:
             - lint
       - smoke_test:
           requires:
             - lint
-
-      # Security scan runs independently — it does not gate other jobs so it
-      # never blocks a merge, but its results are always visible.
       - security_scan:
           filters:
             branches:
