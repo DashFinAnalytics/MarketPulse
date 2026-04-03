@@ -168,6 +168,11 @@ class TestJobs:
             "smoke_test must validate utils imports"
         )
 
+    def test_smoke_test_validates_app_init_import(self, circleci_raw):
+        assert "import app_init" in circleci_raw, (
+            "smoke_test must validate 'import app_init'"
+        )
+
     def test_test_job_stores_test_results(self, circleci_config):
         test_job = circleci_config["jobs"]["test"]
         steps = test_job.get("steps", [])
