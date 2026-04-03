@@ -108,14 +108,19 @@ jobs:
           command: |
             mkdir -p test-results/pytest
             set +e
-            uv run pytest \
-              --junit-xml=test-results/pytest/results.xml \
-              --cov=. \
-              --cov-report=xml:coverage.xml \
-              --cov-report=term-missing \
-              -v \
-              tests/
-            echo $? > /tmp/pytest-exit-code
+            if [ -d tests ]; then
+              uv run pytest \
+                --junit-xml=test-results/pytest/results.xml \
+                --cov=. \
+                --cov-report=xml:coverage.xml \
+                --cov-report=term-missing \
+                -v \
+                tests/
+              echo $? > /tmp/pytest-exit-code
+            else
+              echo "No tests/ directory found; skipping pytest job."
+              echo 0 > /tmp/pytest-exit-code
+            fi
             exit 0
       - store_test_results:
           path: test-results
