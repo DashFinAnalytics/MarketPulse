@@ -68,7 +68,7 @@ class TestGetMarketStatus:
     def test_pre_market_hours(self):
         from utils.market_status import get_market_status
         et = pytz.timezone("America/New_York")
-        # Monday 7:00 AM ET (pre-market: 4am–9:30am)
+        # Monday 7:00 AM ET (pre-market: 4am-9:30am)
         monday = et.localize(datetime(2024, 1, 8, 7, 0))
         with patch("utils.market_status.datetime") as mock_dt:
             mock_dt.now.return_value = monday
