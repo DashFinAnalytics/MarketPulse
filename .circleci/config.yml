@@ -29,6 +29,7 @@ commands:
           command: |
             curl -LsSf https://astral.sh/uv/install.sh | sh
             echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASH_ENV"
+            echo 'export UV_SKIP_WHEEL_FILENAME_CHECK=1' >> "$BASH_ENV"
             source "$BASH_ENV"
             uv --version
 
@@ -56,7 +57,7 @@ commands:
       - restore_dep_cache
       - run:
           name: Install dependencies
-          command: uv sync --extra dev
+          command: UV_SKIP_WHEEL_FILENAME_CHECK=1 uv sync --extra dev
 
 # ---------------------------------------------------------------------------
 # Jobs
