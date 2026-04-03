@@ -87,10 +87,9 @@ jobs:
       - checkout
       - install_deps
       - run:
-- run:
-            name: Run mypy type checker
-            command: |
-              uv run mypy .
+          name: Run mypy type checker
+          command: |
+            uv run mypy .
       - store_test_results:
           path: mypy-results
 
