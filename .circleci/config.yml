@@ -99,7 +99,6 @@ jobs:
   # -------------------------------------------------------------------------
   test:
     <<: [*defaults, *python_image]
-    parallelism: 2
     steps:
       - checkout
       - install_deps
