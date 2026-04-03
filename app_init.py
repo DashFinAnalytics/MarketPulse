@@ -98,7 +98,9 @@ class AppInitializer:
             if hasattr(db_manager, "health_check"):
                 health = bool(db_manager.health_check())
             self.initialization_status["database"] = {
-                "status": "initialized" if health or not hasattr(db_manager, "health_check") else "degraded",
+                "status": "initialized"
+                if health or not hasattr(db_manager, "health_check")
+                else "degraded",
                 "health": health if hasattr(db_manager, "health_check") else "unknown",
             }
         except Exception as exc:
@@ -132,7 +134,9 @@ class AppInitializer:
         else:
             health_status["database"] = "not_configured"
 
-        health_status["openai"] = config.api.ai_available if config.app.enable_ai_analysis else "disabled"
+        health_status["openai"] = (
+            config.api.ai_available if config.app.enable_ai_analysis else "disabled"
+        )
         self.initialization_status["health_checks"] = health_status
 
     def get_system_info(self) -> Dict[str, Any]:
