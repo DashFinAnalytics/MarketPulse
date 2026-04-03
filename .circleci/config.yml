@@ -54,9 +54,9 @@ commands:
     steps:
       - install_uv
       - restore_dep_cache
-- run:
-            name: Install dependencies
-            command: uv sync --extra dev --frozen
+      - run:
+          name: Install dependencies
+          command: uv sync --extra dev --frozen
       - save_dep_cache
 
 # ---------------------------------------------------------------------------
