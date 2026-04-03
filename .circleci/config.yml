@@ -57,7 +57,7 @@ commands:
       - restore_dep_cache
 - run:
             name: Install dependencies
-            command: UV_SKIP_WHEEL_FILENAME_CHECK=1 uv sync --extra dev --frozen
+            command: uv sync --extra dev --frozen
       - save_dep_cache
 
 # ---------------------------------------------------------------------------
