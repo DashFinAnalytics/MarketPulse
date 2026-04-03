@@ -131,13 +131,7 @@ jobs:
   # -------------------------------------------------------------------------
   # Security scan: pip-audit for dependency vulnerabilities
   # -------------------------------------------------------------------------
-- run:
-           name: Audit dependencies for known vulnerabilities
-           command: |
-             uv run pip-audit \
-               --requirement <(uv export --format requirements-txt --no-hashes) \
-               --format json \
-               --output pip-audit-report.json
+  security_scan:
     <<: [*defaults, *python_image]
     steps:
       - checkout
