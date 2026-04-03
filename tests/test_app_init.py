@@ -127,12 +127,11 @@ class TestAppInitializer:
         init = self._make_initializer()
         with patch("app_init.config") as mock_cfg:
             mock_cfg.database.is_available = True
-            with patch("app_init.AppInitializer._initialize_database") as mock_db:
-                # Directly test the exception path
-                mock_cfg.database.is_available = True
-                with patch("builtins.__import__", side_effect=ImportError("no db")):
-                    # This would normally be tested by mocking the db_manager import
-                    pass
+        with patch("builtins.__import__", side_effect=ImportError("no db")):
+                init._initialize_database()
+
+        assert init.initialization_status["database"]["status"] == "degraded"
+        assert "no db" in init.initialization_status["database"]["error"]    
 
     def test_perform_health_checks_runs_cache_check(self):
         init = self._make_initializer()
