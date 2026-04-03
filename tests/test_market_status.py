@@ -202,7 +202,7 @@ class TestGetMajorMarketHours:
         with patch("utils.market_status.datetime") as mock_dt:
             mock_dt.now.return_value = saturday_utc
             # Also provide the utc datetime
-            mock_dt.now.side_effect = lambda tz=None: saturday_utc if tz == pytz.utc else saturday_utc
+            mock_dt.now.side_effect = lambda tz=None: saturday_utc
             result = get_major_market_hours()
         # We can't fully control since datetime.now is called twice in the function,
         # but we can at least verify the list is non-empty and has valid structure
