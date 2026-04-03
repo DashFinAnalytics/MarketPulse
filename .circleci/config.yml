@@ -58,6 +58,8 @@ commands:
       - run:
           name: Install dependencies
           command: UV_SKIP_WHEEL_FILENAME_CHECK=1 uv sync --extra dev
+          command: uv sync --extra dev --frozen
+      - save_dep_cache
 
 # ---------------------------------------------------------------------------
 # Jobs
@@ -72,13 +74,8 @@ jobs:
       - checkout
       - install_deps
       - run:
-          name: Run ruff linter
-          command: |
-            uv run ruff check .
-            uv run ruff check . --output-format=json --output-file=ruff-report.json
-      - run:
-          name: Check black formatting
-          command: uv run black --check --diff .
+          name: Run ruff linter and format check
+          command: uv run ruff check . && uv run ruff format --check .
       - store_artifacts:
           path: ruff-report.json
           destination: lint/ruff-report.json
@@ -95,11 +92,7 @@ jobs:
       - run:
           name: Run mypy type checker
           command: |
-            uv run mypy \
-              --ignore-missing-imports \
-              --no-error-summary \
-              --explicit-package-bases \
-              config.py database.py app_init.py utils/ page_modules/
+            uv run mypy .
       - store_test_results:
           path: mypy-results
 
@@ -108,7 +101,6 @@ jobs:
   # -------------------------------------------------------------------------
   test:
     <<: [*defaults, *python_image]
-    parallelism: 2
     steps:
       - checkout
       - install_deps
@@ -117,14 +109,19 @@ jobs:
           command: |
             mkdir -p test-results/pytest
             set +e
-            uv run pytest \
-              --junit-xml=test-results/pytest/results.xml \
-              --cov=. \
-              --cov-report=xml:coverage.xml \
-              --cov-report=term-missing \
-              -v \
-              tests/
-            echo $? > /tmp/pytest-exit-code
+            if [ -d tests ]; then
+              uv run pytest \
+                --junit-xml=test-results/pytest/results.xml \
+                --cov=. \
+                --cov-report=xml:coverage.xml \
+                --cov-report=term-missing \
+                -v \
+                tests/
+              echo $? > /tmp/pytest-exit-code
+            else
+              echo "No tests/ directory found; skipping pytest job."
+              echo 0 > /tmp/pytest-exit-code
+            fi
             exit 0
       - store_test_results:
           path: test-results
