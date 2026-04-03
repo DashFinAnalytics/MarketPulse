@@ -60,16 +60,16 @@ def log_execution_time(logger: Optional[StructuredLogger] = None) -> Callable:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             func_logger = logger or get_logger(func.__module__)
-            start = time.time()
+            start = time.perf_counter()
             try:
                 result = func(*args, **kwargs)
-                func_logger.debug(func.__name__, execution_time=f"{time.time() - start:.3f}s")
+                func_logger.debug(func.__name__, execution_time=f"{time.perf_counter() - start:.3f}s")
                 return result
             except Exception as exc:
                 func_logger.error(
                     f"{func.__name__} failed",
                     error=str(exc),
-                    execution_time=f"{time.time() - start:.3f}s",
+                    execution_time=f"{time.perf_counter() - start:.3f}s",
                 )
                 raise
 
@@ -122,7 +122,21 @@ class StreamlitLogHandler(logging.Handler):
 
 def setup_logging() -> None:
     root_logger = logging.getLogger()
-    root_logger.handlers.clear()
+
+    for handler in list(root_logger.handlers):
+        try:
+            if hasattr(handler, "flush"):
+                handler.flush()  # type: ignore[call-arg]
+        except Exception as exc:
+            root_logger.debug("Failed to flush log handler during cleanup: %s", exc)
+
+        try:
+            handler.close()
+        except Exception as exc:
+            root_logger.debug("Failed to close log handler during cleanup: %s", exc)
+
+        root_logger.removeHandler(handler)
+
     root_logger.setLevel(getattr(logging, config.app.log_level.upper(), logging.INFO))
 
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -132,9 +146,16 @@ def setup_logging() -> None:
     root_logger.addHandler(console_handler)
 
     if not config.app.debug:
-        file_handler = logging.FileHandler("marketpulse.log")
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
+        try:
+            file_handler = logging.FileHandler("marketpulse.log")
+        except OSError as exc:
+            root_logger.warning(
+                "File logging disabled: could not open log file 'marketpulse.log': %s",
+                exc,
+            )
+        else:
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
 
     if config.app.debug:
         ui_handler = StreamlitLogHandler()
@@ -145,3 +166,4 @@ def setup_logging() -> None:
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("yfinance").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.INFO)
+

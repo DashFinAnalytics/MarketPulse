@@ -10,6 +10,8 @@ This module is intentionally conservative:
 from __future__ import annotations
 
 import os
+import secrets
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -22,24 +24,58 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 _ENV_PATH = Path(__file__).parent / ".env"
-if load_dotenv and _ENV_PATH.exists():
-    load_dotenv(_ENV_PATH)
+if _ENV_PATH.exists():
+    if load_dotenv is not None:
+        load_dotenv(_ENV_PATH)
+    else:
+        warnings.warn(
+            (
+                f"Config: .env file found at {_ENV_PATH} but python-dotenv "
+                "is not installed; environment variables from this file "
+                "will be ignored."
+            ),
+            RuntimeWarning,
+            stacklevel=2,
+        )
 
 
 def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
 
+    normalized = value.strip().lower()
+    true_values = {"1", "true", "yes", "on"}
+    false_values = {"0", "false", "no", "off"}
+
+    if normalized in true_values:
+        return True
+    if normalized in false_values:
+        return False
+
+    warnings.warn(
+        (
+            f"Config: unrecognized boolean value for {name!r}: {value!r}; "
+            f"using default {default}"
+        ),
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    return default
 
 def _env_int(name: str, default: int) -> int:
     value = os.getenv(name)
     if value is None:
         return default
+
     try:
-        return int(value)
-    except ValueError:
+        return int(value.strip())
+    except (TypeError, ValueError):
+        warnings.warn(
+            f"Invalid integer for environment variable {name!r}: {value!r}. Using default {default}.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return default
 
 
@@ -47,9 +83,15 @@ def _env_float(name: str, default: float) -> float:
     value = os.getenv(name)
     if value is None:
         return default
+
     try:
-        return float(value)
-    except ValueError:
+        return float(value.strip())
+    except (TypeError, ValueError):
+        warnings.warn(
+            f"Invalid float for environment variable {name!r}: {value!r}. Using default {default}.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return default
 
 
@@ -100,13 +142,19 @@ class CacheConfig:
 
 @dataclass
 class AppConfig:
-    environment: str = field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
+    # ENVIRONMENT is checked first for compatibility; APP_ENV is the documented name in .env.example.
+    environment: str = field(
+        default_factory=lambda: os.getenv("ENVIRONMENT")
+        or os.getenv("APP_ENV", "development")
+    )
     debug: bool = field(default_factory=lambda: _env_bool("DEBUG", False))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
     title: str = field(default_factory=lambda: os.getenv("APP_TITLE", "MarketPulse"))
     streamlit_host: str = field(default_factory=lambda: os.getenv("STREAMLIT_HOST", "0.0.0.0"))
     streamlit_port: int = field(default_factory=lambda: _env_int("STREAMLIT_PORT", 5000))
-    secret_key: str = field(default_factory=lambda: os.getenv("SECRET_KEY", "dev-secret-key-change-me"))
+    # Random per-process default; sessions are invalidated on restart.
+    # Always set SECRET_KEY explicitly in any persistent or production deployment.
+    secret_key: str = field(default_factory=lambda: os.getenv("SECRET_KEY") or secrets.token_hex(32))
     enable_ai_analysis: bool = field(default_factory=lambda: _env_bool("ENABLE_AI_ANALYSIS", True))
     enable_news_fetching: bool = field(default_factory=lambda: _env_bool("ENABLE_NEWS_FETCHING", True))
     enable_real_time_updates: bool = field(default_factory=lambda: _env_bool("ENABLE_REAL_TIME_UPDATES", False))
@@ -143,6 +191,16 @@ class Config:
             self.warnings.append(
                 "ENVIRONMENT=development but DEBUG is false; this is allowed but may hide useful diagnostics."
             )
+
+        if not os.getenv("SECRET_KEY"):
+            if self.app.environment.lower() != "development":
+                self.warnings.append(
+                    "SECRET_KEY is not configured in a non-development environment; this is a security risk."
+                )
+            else:
+                self.warnings.append(
+                    "SECRET_KEY is not set; using a randomly generated per-process key for development."
+                )
 
     def get_warning_summary(self) -> List[str]:
         return list(self.warnings)

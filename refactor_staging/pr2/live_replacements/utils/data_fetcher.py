@@ -40,15 +40,25 @@ class DataFetcher:
         return normalized
 
     def _sleep_before_retry(self, attempt: int) -> None:
-        time.sleep(min(2 ** attempt, 4))
+        time.sleep(min(2**attempt, 4))
 
-    def _store_data_if_possible(self, symbol: str, data: Optional[Dict[str, Any]], data_type: str) -> None:
+    def _store_data_if_possible(
+        self,
+        symbol: str,
+        data: Optional[Dict[str, Any]],
+        data_type: str,
+    ) -> None:
         if not data:
             return
         try:
             db_manager.store_financial_data(symbol, data, data_type)
         except Exception as exc:
-            logger.warning("Failed to persist fetched data", symbol=symbol, data_type=data_type, error=str(exc))
+            logger.warning(
+                "Failed to persist fetched data",
+                symbol=symbol,
+                data_type=data_type,
+                error=str(exc),
+            )
 
     def _download_history(self, symbol: str, period: str) -> pd.DataFrame:
         symbol = self._validate_symbol(symbol)
@@ -81,7 +91,7 @@ class DataFetcher:
             logger.warning("Symbol validation failed", symbol=symbol, error=str(exc))
             return None
 
-        for attempt in range(max(1, self.retry_attempts)):
+        for attempt in range(max(1, _self.retry_attempts)):
             try:
                 ticker = yf.Ticker(symbol)
                 history = ticker.history(period="2d")
@@ -94,10 +104,18 @@ class DataFetcher:
                     info = {}
 
                 current_price = float(history["Close"].iloc[-1])
-                prev_close = float(history["Close"].iloc[-2]) if len(history) > 1 else current_price
+                prev_close = (
+                    float(history["Close"].iloc[-2])
+                    if len(history) > 1
+                    else current_price
+                )
                 change = current_price - prev_close
                 change_pct = (change / prev_close) * 100 if prev_close != 0 else 0.0
-                volume = float(history["Volume"].iloc[-1]) if "Volume" in history.columns else 0.0
+                volume = (
+                    float(history["Volume"].iloc[-1])
+                    if "Volume" in history.columns
+                    else 0.0
+                )
 
                 return {
                     "symbol": symbol,
@@ -151,7 +169,10 @@ class DataFetcher:
         return self._collect_asset_data(symbols, "index")
 
     @log_execution_time()
-    def get_commodities_data(self, symbols: Sequence[str]) -> Dict[str, Dict[str, Any]]:
+    def get_commodities_data(
+        self,
+        symbols: Sequence[str],
+    ) -> Dict[str, Dict[str, Any]]:
         return self._collect_asset_data(symbols, "commodity")
 
     @log_execution_time()
@@ -185,7 +206,12 @@ class DataFetcher:
     @st.cache_data(ttl=1800)
     @log_execution_time()
     def get_bond_yields(_self) -> Dict[str, Dict[str, Any]]:
-        mapping = {"3M": "^IRX", "5Y": "^FVX", "10Y": "^TNX", "30Y": "^TYX"}
+        mapping = {
+            "3M": "^IRX",
+            "5Y": "^FVX",
+            "10Y": "^TNX",
+            "30Y": "^TYX",
+        }
         yields: Dict[str, Dict[str, Any]] = {}
         for label, symbol in mapping.items():
             history = _self._download_history(symbol, "5d")
@@ -193,7 +219,11 @@ class DataFetcher:
                 continue
             value = float(history["Close"].iloc[-1])
             previous = float(history["Close"].iloc[-2]) if len(history) > 1 else value
-            yields[label] = {"yield": value, "change": value - previous, "symbol": symbol}
+            yields[label] = {
+                "yield": value,
+                "change": value - previous,
+                "symbol": symbol,
+            }
         return yields
 
     @log_execution_time()
@@ -208,7 +238,11 @@ class DataFetcher:
 
     @st.cache_data(ttl=300)
     @log_execution_time()
-    def get_historical_data(_self, symbol: str, period: str = "1mo") -> Optional[pd.DataFrame]:
+    def get_historical_data(
+        _self,
+        symbol: str,
+        period: str = "1mo",
+    ) -> Optional[pd.DataFrame]:
         history = _self._download_history(symbol, period)
         return None if history.empty else history
 
@@ -219,40 +253,79 @@ class DataFetcher:
         for symbol in key_symbols:
             data = self._fetch_ticker_data(symbol)
             if data:
-                summary[symbol] = {"price": data["price"], "change_pct": data["change_pct"]}
+                summary[symbol] = {
+                    "price": data["price"],
+                    "change_pct": data["change_pct"],
+                }
         return summary
 
     @log_execution_time()
-    def get_top_movers(self, symbols: Sequence[str], limit: int = 5) -> List[Dict[str, Any]]:
+    def get_top_movers(
+        self,
+        symbols: Sequence[str],
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
         movers: List[Dict[str, Any]] = []
         for symbol in symbols:
             data = self._fetch_ticker_data(symbol)
             if data:
-                movers.append({"symbol": symbol, "price": data["price"], "change_pct": data["change_pct"]})
+                movers.append(
+                    {
+                        "symbol": symbol,
+                        "price": data["price"],
+                        "change_pct": data["change_pct"],
+                    }
+                )
         movers.sort(key=lambda item: abs(item["change_pct"]), reverse=True)
         return movers[:limit]
 
     @st.cache_data(ttl=300)
     @log_execution_time()
-    def get_forex_data(_self, pairs: Optional[Sequence[str]] = None) -> Dict[str, Dict[str, Any]]:
+    def get_forex_data(
+        _self,
+        pairs: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
         if pairs is None:
             pairs = [
-                "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCHF=X",
-                "AUDUSD=X", "USDCAD=X", "NZDUSD=X", "USDCNY=X",
-                "USDINR=X", "USDMXN=X", "USDBRL=X", "USDSGD=X",
+                "EURUSD=X",
+                "GBPUSD=X",
+                "USDJPY=X",
+                "USDCHF=X",
+                "AUDUSD=X",
+                "USDCAD=X",
+                "NZDUSD=X",
+                "USDCNY=X",
+                "USDINR=X",
+                "USDMXN=X",
+                "USDBRL=X",
+                "USDSGD=X",
             ]
         return _self._collect_asset_data(pairs)
 
     @st.cache_data(ttl=300)
     @log_execution_time()
-    def get_futures_data(_self, contracts: Optional[Sequence[str]] = None) -> Dict[str, Dict[str, Any]]:
+    def get_futures_data(
+        _self,
+        contracts: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
         if contracts is None:
             contracts = [
-                "ES=F", "NQ=F", "YM=F", "RTY=F",
-                "GC=F", "SI=F", "HG=F",
-                "CL=F", "NG=F", "RB=F",
-                "ZB=F", "ZN=F", "ZT=F",
-                "ZC=F", "ZW=F", "ZS=F",
+                "ES=F",
+                "NQ=F",
+                "YM=F",
+                "RTY=F",
+                "GC=F",
+                "SI=F",
+                "HG=F",
+                "CL=F",
+                "NG=F",
+                "RB=F",
+                "ZB=F",
+                "ZN=F",
+                "ZT=F",
+                "ZC=F",
+                "ZW=F",
+                "ZS=F",
             ]
         return _self._collect_asset_data(contracts)
 
@@ -265,7 +338,7 @@ class DataFetcher:
             logger.warning("Invalid options symbol", symbol=symbol, error=str(exc))
             return None
 
-        for attempt in range(max(1, self.retry_attempts)):
+        for attempt in range(max(1, _self.retry_attempts)):
             try:
                 ticker = yf.Ticker(symbol)
                 expirations = ticker.options
@@ -289,16 +362,32 @@ class DataFetcher:
                             total_put_oi += int(puts["openInterest"].fillna(0).sum())
                             total_put_vol += int(puts["volume"].fillna(0).sum())
                     except Exception as exc:
-                        logger.warning("Failed to parse option chain expiration", symbol=symbol, expiration=expiration, error=str(exc))
+                        logger.warning(
+                            "Failed to parse option chain expiration",
+                            symbol=symbol,
+                            expiration=expiration,
+                            error=str(exc),
+                        )
 
-                pc_ratio_oi = round(total_put_oi / total_call_oi, 3) if total_call_oi > 0 else None
-                pc_ratio_vol = round(total_put_vol / total_call_vol, 3) if total_call_vol > 0 else None
+                pc_ratio_oi = (
+                    round(total_put_oi / total_call_oi, 3)
+                    if total_call_oi > 0
+                    else None
+                )
+                pc_ratio_vol = (
+                    round(total_put_vol / total_call_vol, 3)
+                    if total_call_vol > 0
+                    else None
+                )
 
                 try:
                     info = ticker.info or {}
                 except Exception:
                     info = {}
-                current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+
+                current_price = (
+                    info.get("currentPrice") or info.get("regularMarketPrice")
+                )
                 atm_iv = None
                 if current_price and expirations:
                     try:
@@ -307,9 +396,17 @@ class DataFetcher:
                         if not calls.empty:
                             idx = (calls["strike"] - current_price).abs().idxmin()
                             iv_value = calls.loc[idx, "impliedVolatility"]
-                            atm_iv = round(float(iv_value) * 100, 2) if iv_value else None
+                            atm_iv = (
+                                round(float(iv_value) * 100, 2)
+                                if iv_value
+                                else None
+                            )
                     except Exception as exc:
-                        logger.warning("Failed to compute ATM IV", symbol=symbol, error=str(exc))
+                        logger.warning(
+                            "Failed to compute ATM IV",
+                            symbol=symbol,
+                            error=str(exc),
+                        )
 
                 return {
                     "symbol": symbol,
@@ -324,21 +421,34 @@ class DataFetcher:
                     "next_expiration": expirations[0] if expirations else None,
                 }
             except Exception as exc:
-                logger.warning("Options summary fetch attempt failed", symbol=symbol, attempt=attempt + 1, error=str(exc))
+                logger.warning(
+                    "Options summary fetch attempt failed",
+                    symbol=symbol,
+                    attempt=attempt + 1,
+                    error=str(exc),
+                )
                 if attempt < _self.retry_attempts - 1:
                     _self._sleep_before_retry(attempt)
         return None
 
     @st.cache_data(ttl=3600)
     @log_execution_time()
-    def get_option_chain(_self, symbol: str, expiration: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_option_chain(
+        _self,
+        symbol: str,
+        expiration: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         try:
             symbol = _self._validate_symbol(symbol)
         except ValidationError as exc:
-            logger.warning("Invalid option chain symbol", symbol=symbol, error=str(exc))
+            logger.warning(
+                "Invalid option chain symbol",
+                symbol=symbol,
+                error=str(exc),
+            )
             return None
 
-        for attempt in range(max(1, self.retry_attempts)):
+        for attempt in range(max(1, _self.retry_attempts)):
             try:
                 ticker = yf.Ticker(symbol)
                 if not expiration:
@@ -347,21 +457,45 @@ class DataFetcher:
                         return None
                     expiration = expirations[0]
                 chain = ticker.option_chain(expiration)
-                return {"calls": chain.calls, "puts": chain.puts, "expiration": expiration}
+                return {
+                    "calls": chain.calls,
+                    "puts": chain.puts,
+                    "expiration": expiration,
+                }
             except Exception as exc:
-                logger.warning("Option chain fetch attempt failed", symbol=symbol, attempt=attempt + 1, error=str(exc))
+                logger.warning(
+                    "Option chain fetch attempt failed",
+                    symbol=symbol,
+                    attempt=attempt + 1,
+                    error=str(exc),
+                )
                 if attempt < _self.retry_attempts - 1:
                     _self._sleep_before_retry(attempt)
         return None
 
     @st.cache_data(ttl=3600)
     @log_execution_time()
-    def get_risk_metrics(_self, symbol: str, benchmark: str = "^GSPC", period: str = "1y") -> Optional[Dict[str, Any]]:
+    def get_risk_metrics(
+        _self,
+        symbol: str,
+        benchmark: str = "^GSPC",
+        period: str = "1y",
+    ) -> Optional[Dict[str, Any]]:
         try:
             symbol = _self._validate_symbol(symbol)
             benchmark = _self._validate_symbol(benchmark)
-            symbol_history = yf.download(symbol, period=period, progress=False, auto_adjust=True)
-            benchmark_history = yf.download(benchmark, period=period, progress=False, auto_adjust=True)
+            symbol_history = yf.download(
+                symbol,
+                period=period,
+                progress=False,
+                auto_adjust=True,
+            )
+            benchmark_history = yf.download(
+                benchmark,
+                period=period,
+                progress=False,
+                auto_adjust=True,
+            )
             if symbol_history.empty or benchmark_history.empty:
                 return None
 
@@ -379,11 +513,25 @@ class DataFetcher:
             annual_vol = float(aligned["symbol"].std() * np.sqrt(trading_days))
             risk_free = 0.05
             covariance = aligned.cov()
-            beta = float(covariance.loc["symbol", "benchmark"] / aligned["benchmark"].var())
-            alpha = annual_return - (risk_free + beta * (float(aligned["benchmark"].mean()) * trading_days - risk_free))
+            beta = float(
+                covariance.loc["symbol", "benchmark"]
+                / aligned["benchmark"].var()
+            )
+            alpha = annual_return - (
+                risk_free
+                + beta
+                * (float(aligned["benchmark"].mean()) * trading_days - risk_free)
+            )
             sharpe = (annual_return - risk_free) / annual_vol if annual_vol else 0.0
-            downside = aligned["symbol"][aligned["symbol"] < 0].std() * np.sqrt(trading_days)
-            sortino = (annual_return - risk_free) / float(downside) if downside else 0.0
+            downside = (
+                aligned["symbol"][aligned["symbol"] < 0].std()
+                * np.sqrt(trading_days)
+            )
+            sortino = (
+                (annual_return - risk_free) / float(downside)
+                if downside
+                else 0.0
+            )
             var_95 = float(np.percentile(aligned["symbol"], 5))
             var_99 = float(np.percentile(aligned["symbol"], 1))
             cvar_95 = float(aligned["symbol"][aligned["symbol"] <= var_95].mean())
@@ -413,12 +561,20 @@ class DataFetcher:
                 "rolling_vol": rolling_vol,
             }
         except Exception as exc:
-            logger.warning("Failed to calculate risk metrics", symbol=symbol, benchmark=benchmark, error=str(exc))
+            logger.warning(
+                "Failed to calculate risk metrics",
+                symbol=symbol,
+                benchmark=benchmark,
+                error=str(exc),
+            )
             return None
 
     @st.cache_data(ttl=3600)
     @log_execution_time()
-    def get_earnings_calendar(_self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_earnings_calendar(
+        _self,
+        symbol: str,
+    ) -> Optional[Dict[str, Any]]:
         try:
             symbol = _self._validate_symbol(symbol)
             ticker = yf.Ticker(symbol)
@@ -435,17 +591,28 @@ class DataFetcher:
                     result[key] = None
             try:
                 recommendations = ticker.recommendations
-                result["recommendations"] = recommendations.tail(15) if recommendations is not None and not recommendations.empty else None
+                result["recommendations"] = (
+                    recommendations.tail(15)
+                    if recommendations is not None and not recommendations.empty
+                    else None
+                )
             except Exception:
                 result["recommendations"] = None
             return result
         except Exception as exc:
-            logger.warning("Failed to fetch earnings calendar", symbol=symbol, error=str(exc))
+            logger.warning(
+                "Failed to fetch earnings calendar",
+                symbol=symbol,
+                error=str(exc),
+            )
             return None
 
     @st.cache_data(ttl=3600)
     @log_execution_time()
-    def get_dividends_splits(_self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_dividends_splits(
+        _self,
+        symbol: str,
+    ) -> Optional[Dict[str, Any]]:
         try:
             symbol = _self._validate_symbol(symbol)
             ticker = yf.Ticker(symbol)
@@ -457,25 +624,45 @@ class DataFetcher:
             splits = ticker.splits
             return {
                 "symbol": symbol,
-                "dividends": dividends.tail(20) if dividends is not None and not dividends.empty else None,
-                "splits": splits.tail(10) if splits is not None and not splits.empty else None,
+                "dividends": dividends.tail(20)
+                if dividends is not None and not dividends.empty
+                else None,
+                "splits": splits.tail(10)
+                if splits is not None and not splits.empty
+                else None,
                 "dividend_yield": info.get("dividendYield"),
                 "ex_dividend_date": info.get("exDividendDate"),
                 "payout_ratio": info.get("payoutRatio"),
                 "forward_annual_dividend": info.get("dividendRate"),
             }
         except Exception as exc:
-            logger.warning("Failed to fetch dividends and splits", symbol=symbol, error=str(exc))
+            logger.warning(
+                "Failed to fetch dividends and splits",
+                symbol=symbol,
+                error=str(exc),
+            )
             return None
 
     @st.cache_data(ttl=300)
     @log_execution_time()
-    def get_crypto_data(_self, symbols: Optional[Sequence[str]] = None) -> Dict[str, Dict[str, Any]]:
+    def get_crypto_data(
+        _self,
+        symbols: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
         if symbols is None:
             symbols = [
-                "BTC-USD", "ETH-USD", "BNB-USD", "XRP-USD",
-                "ADA-USD", "SOL-USD", "DOGE-USD", "MATIC-USD",
-                "DOT-USD", "AVAX-USD", "LINK-USD", "UNI7083-USD",
+                "BTC-USD",
+                "ETH-USD",
+                "BNB-USD",
+                "XRP-USD",
+                "ADA-USD",
+                "SOL-USD",
+                "DOGE-USD",
+                "MATIC-USD",
+                "DOT-USD",
+                "AVAX-USD",
+                "LINK-USD",
+                "UNI7083-USD",
             ]
         return _self._collect_asset_data(symbols)
 
@@ -483,22 +670,86 @@ class DataFetcher:
     @log_execution_time()
     def get_economic_indicators(_self) -> List[Dict[str, Any]]:
         indicators = [
-            {"symbol": "DX-Y.NYB", "label": "US Dollar Index (DXY)", "category": "Currency"},
-            {"symbol": "TIP", "label": "TIPS ETF (Inflation)", "category": "Inflation"},
-            {"symbol": "RINF", "label": "Inflation Expectations ETF", "category": "Inflation"},
-            {"symbol": "HYG", "label": "High-Yield Bond ETF", "category": "Credit"},
-            {"symbol": "LQD", "label": "Investment-Grade Bond ETF", "category": "Credit"},
-            {"symbol": "JNK", "label": "Junk Bond ETF", "category": "Credit"},
-            {"symbol": "TLT", "label": "20Y+ Treasury ETF", "category": "Rates"},
-            {"symbol": "SHY", "label": "1-3Y Treasury ETF", "category": "Rates"},
-            {"symbol": "BIL", "label": "1-3M T-Bill ETF", "category": "Rates"},
-            {"symbol": "XLY", "label": "Consumer Discretionary ETF", "category": "Cycle"},
-            {"symbol": "XLP", "label": "Consumer Staples ETF", "category": "Cycle"},
-            {"symbol": "XLI", "label": "Industrials ETF", "category": "Cycle"},
-            {"symbol": "DJP", "label": "Bloomberg Commodity ETN", "category": "Commodities"},
-            {"symbol": "PDBC", "label": "Diversified Commodity ETF", "category": "Commodities"},
-            {"symbol": "EEM", "label": "Emerging Markets ETF", "category": "Global"},
-            {"symbol": "VEA", "label": "Developed Markets ETF", "category": "Global"},
+            {
+                "symbol": "DX-Y.NYB",
+                "label": "US Dollar Index (DXY)",
+                "category": "Currency",
+            },
+            {
+                "symbol": "TIP",
+                "label": "TIPS ETF (Inflation)",
+                "category": "Inflation",
+            },
+            {
+                "symbol": "RINF",
+                "label": "Inflation Expectations ETF",
+                "category": "Inflation",
+            },
+            {
+                "symbol": "HYG",
+                "label": "High-Yield Bond ETF",
+                "category": "Credit",
+            },
+            {
+                "symbol": "LQD",
+                "label": "Investment-Grade Bond ETF",
+                "category": "Credit",
+            },
+            {
+                "symbol": "JNK",
+                "label": "Junk Bond ETF",
+                "category": "Credit",
+            },
+            {
+                "symbol": "TLT",
+                "label": "20Y+ Treasury ETF",
+                "category": "Rates",
+            },
+            {
+                "symbol": "SHY",
+                "label": "1-3Y Treasury ETF",
+                "category": "Rates",
+            },
+            {
+                "symbol": "BIL",
+                "label": "1-3M T-Bill ETF",
+                "category": "Rates",
+            },
+            {
+                "symbol": "XLY",
+                "label": "Consumer Discretionary ETF",
+                "category": "Cycle",
+            },
+            {
+                "symbol": "XLP",
+                "label": "Consumer Staples ETF",
+                "category": "Cycle",
+            },
+            {
+                "symbol": "XLI",
+                "label": "Industrials ETF",
+                "category": "Cycle",
+            },
+            {
+                "symbol": "DJP",
+                "label": "Bloomberg Commodity ETN",
+                "category": "Commodities",
+            },
+            {
+                "symbol": "PDBC",
+                "label": "Diversified Commodity ETF",
+                "category": "Commodities",
+            },
+            {
+                "symbol": "EEM",
+                "label": "Emerging Markets ETF",
+                "category": "Global",
+            },
+            {
+                "symbol": "VEA",
+                "label": "Developed Markets ETF",
+                "category": "Global",
+            },
         ]
         results: List[Dict[str, Any]] = []
         for indicator in indicators:
@@ -520,7 +771,19 @@ class DataFetcher:
     @st.cache_data(ttl=600)
     @log_execution_time()
     def get_market_breadth(_self) -> Optional[Dict[str, Any]]:
-        sector_etfs = ["XLK", "XLV", "XLE", "XLF", "XLI", "XLU", "XLB", "XLRE", "XLY", "XLP", "XLC"]
+        sector_etfs = [
+            "XLK",
+            "XLV",
+            "XLE",
+            "XLF",
+            "XLI",
+            "XLU",
+            "XLB",
+            "XLRE",
+            "XLY",
+            "XLP",
+            "XLC",
+        ]
         changes: List[Dict[str, Any]] = []
         advancing = 0
         declining = 0
@@ -537,7 +800,11 @@ class DataFetcher:
         if total == 0:
             return None
         score = (advancing / total) * 100
-        avg_change = sum(item["change_pct"] for item in changes) / len(changes) if changes else 0.0
+        avg_change = (
+            sum(item["change_pct"] for item in changes) / len(changes)
+            if changes
+            else 0.0
+        )
         return {
             "score": round(score, 1),
             "advancing": advancing,
@@ -546,24 +813,75 @@ class DataFetcher:
             "avg_sector_change": round(avg_change, 2),
             "sector_changes": changes,
             "label": (
-                "Extreme Fear" if score < 20 else
-                "Fear" if score < 40 else
-                "Neutral" if score < 60 else
-                "Greed" if score < 80 else
-                "Extreme Greed"
+                "Extreme Fear"
+                if score < 20
+                else "Fear"
+                if score < 40
+                else "Neutral"
+                if score < 60
+                else "Greed"
+                if score < 80
+                else "Extreme Greed"
             ),
         }
 
     @st.cache_data(ttl=300)
     @log_execution_time()
-    def get_top_movers_broad(_self, limit: int = 10) -> Dict[str, List[Dict[str, Any]]]:
+    def get_top_movers_broad(
+        _self,
+        limit: int = 10,
+    ) -> Dict[str, List[Dict[str, Any]]]:
         symbols = [
-            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "JNJ",
-            "V", "UNH", "XOM", "WMT", "PG", "MA", "LLY", "HD", "ABBV", "CVX",
-            "BAC", "PFE", "KO", "COST", "DIS", "NFLX", "AMD", "INTC", "MRK", "T",
-            "SPY", "QQQ", "IWM", "XLK", "XLE", "XLF", "GLD", "SLV", "TLT", "HYG",
-            "BTC-USD", "ETH-USD", "SOL-USD", "EURUSD=X", "GBPUSD=X",
-            "GC=F", "CL=F", "ES=F", "NQ=F", "^VIX",
+            "AAPL",
+            "MSFT",
+            "GOOGL",
+            "AMZN",
+            "NVDA",
+            "TSLA",
+            "META",
+            "BRK-B",
+            "JPM",
+            "JNJ",
+            "V",
+            "UNH",
+            "XOM",
+            "WMT",
+            "PG",
+            "MA",
+            "LLY",
+            "HD",
+            "ABBV",
+            "CVX",
+            "BAC",
+            "PFE",
+            "KO",
+            "COST",
+            "DIS",
+            "NFLX",
+            "AMD",
+            "INTC",
+            "MRK",
+            "T",
+            "SPY",
+            "QQQ",
+            "IWM",
+            "XLK",
+            "XLE",
+            "XLF",
+            "GLD",
+            "SLV",
+            "TLT",
+            "HYG",
+            "BTC-USD",
+            "ETH-USD",
+            "SOL-USD",
+            "EURUSD=X",
+            "GBPUSD=X",
+            "GC=F",
+            "CL=F",
+            "ES=F",
+            "NQ=F",
+            "^VIX",
         ]
         movers: List[Dict[str, Any]] = []
         for symbol in symbols:
@@ -598,9 +916,18 @@ class DataFetcher:
                 try:
                     symbol = _self._validate_symbol(raw_symbol)
                 except ValidationError as exc:
-                    logger.warning("Skipping invalid optimization symbol", symbol=raw_symbol, error=str(exc))
+                    logger.warning(
+                        "Skipping invalid optimization symbol",
+                        symbol=raw_symbol,
+                        error=str(exc),
+                    )
                     continue
-                history = yf.download(symbol, period=period, progress=False, auto_adjust=True)
+                history = yf.download(
+                    symbol,
+                    period=period,
+                    progress=False,
+                    auto_adjust=True,
+                )
                 if history.empty:
                     continue
                 prices[symbol] = history["Close"].squeeze()
@@ -622,7 +949,11 @@ class DataFetcher:
             def negative_sharpe(weights: np.ndarray) -> float:
                 portfolio_return = float(np.dot(weights, mean_returns))
                 portfolio_vol = portfolio_volatility(weights)
-                return -(portfolio_return - risk_free) / portfolio_vol if portfolio_vol > 0 else 0.0
+                return (
+                    -(portfolio_return - risk_free) / portfolio_vol
+                    if portfolio_vol > 0
+                    else 0.0
+                )
 
             constraints = [{"type": "eq", "fun": lambda weights: np.sum(weights) - 1}]
             bounds = [(0, 1)] * count
@@ -654,7 +985,11 @@ class DataFetcher:
             weight_array = np.array(weights)
             portfolio_return = float(np.dot(weight_array, mean_returns))
             portfolio_vol = portfolio_volatility(weight_array)
-            sharpe = (portfolio_return - risk_free) / portfolio_vol if portfolio_vol > 0 else 0.0
+            sharpe = (
+                (portfolio_return - risk_free) / portfolio_vol
+                if portfolio_vol > 0
+                else 0.0
+            )
 
             target_returns = np.linspace(mean_returns.min(), mean_returns.max(), 40)
             frontier_vols: List[float] = []
@@ -665,7 +1000,10 @@ class DataFetcher:
 
             for target_return in target_returns:
                 target_constraints = [
-                    {"type": "eq", "fun": lambda weights, tr=target_return: np.dot(weights, mean_returns) - tr},
+                    {
+                        "type": "eq",
+                        "fun": lambda weights, tr=target_return: np.dot(weights, mean_returns) - tr,
+                    },
                     {"type": "eq", "fun": lambda weights: np.sum(weights) - 1},
                 ]
                 result = sco.minimize(
@@ -681,7 +1019,11 @@ class DataFetcher:
                 vol = portfolio_volatility(result.x)
                 frontier_vols.append(vol)
                 frontier_rets.append(float(target_return))
-                frontier_sharpe = (float(target_return) - risk_free) / vol if vol > 0 else -np.inf
+                frontier_sharpe = (
+                    (float(target_return) - risk_free) / vol
+                    if vol > 0
+                    else -np.inf
+                )
                 if frontier_sharpe > best_sharpe:
                     best_sharpe = frontier_sharpe
                     max_sharpe_vol = vol
@@ -702,5 +1044,9 @@ class DataFetcher:
                 },
             }
         except Exception as exc:
-            logger.warning("Portfolio optimization failed", method=method, error=str(exc))
+            logger.warning(
+                "Portfolio optimization failed",
+                method=method,
+                error=str(exc),
+            )
             return None

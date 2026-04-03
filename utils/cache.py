@@ -6,12 +6,17 @@ state and logic that should not depend on Streamlit runtime semantics.
 
 from __future__ import annotations
 
+import hashlib
+import logging
+import pickle
 import threading
 import time
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
 from config import config
+
+_log = logging.getLogger(__name__)
 
 
 class MemoryCache:
@@ -26,7 +31,7 @@ class MemoryCache:
             entry = self._cache.get(key)
             if entry is None:
                 return None
-            if time.time() > entry["expires_at"]:
+            if time.monotonic() > entry["expires_at"]:
                 del self._cache[key]
                 return None
             return entry["value"]
@@ -36,7 +41,7 @@ class MemoryCache:
         with self._lock:
             self._cache[key] = {
                 "value": value,
-                "expires_at": time.time() + expires_in,
+                "expires_at": time.monotonic() + expires_in,
                 "created_at": time.time(),
             }
 
@@ -53,15 +58,19 @@ class MemoryCache:
 
     def cleanup_expired(self) -> int:
         with self._lock:
-            now = time.time()
-            expired = [key for key, value in self._cache.items() if now > value["expires_at"]]
+            now = time.monotonic()
+            expired = [
+                key 
+                for key, value in self._cache.items()
+                if now > value["expires_at"]
+            ]
             for key in expired:
                 del self._cache[key]
             return len(expired)
 
     def stats(self) -> Dict[str, int]:
         with self._lock:
-            now = time.time()
+            now = time.monotonic()
             active_entries = sum(1 for value in self._cache.values() if now <= value["expires_at"])
             return {
                 "total_entries": len(self._cache),
@@ -82,10 +91,21 @@ def cached(ttl: Optional[int] = None, key_func: Optional[Callable[..., str]] = N
             if key_func:
                 cache_key = key_func(*args, **kwargs)
             else:
-                parts = [func.__name__]
-                parts.extend(str(arg) for arg in args)
-                parts.extend(f"{key}={value}" for key, value in sorted(kwargs.items()))
-                cache_key = ":".join(parts)
+                func_id = f"{func.__module__}.{func.__qualname__}"
+                try:
+                    args_hash = hashlib.sha256(
+                        pickle.dumps((args, sorted(kwargs.items())))
+                    ).hexdigest()
+                except (pickle.PickleError, TypeError, AttributeError) as exc:
+                    _log.warning(
+                        "cache: pickle serialisation failed for %s; falling back to repr. Error: %s",
+                        func_id,
+                        exc,
+                    )
+                    args_hash = hashlib.sha256(
+                        repr((args, sorted(kwargs.items()))).encode()
+                    ).hexdigest()
+                cache_key = f"{func_id}:{args_hash}"
 
             result = cache.get(cache_key)
             if result is not None:
