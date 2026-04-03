@@ -63,7 +63,9 @@ def log_execution_time(logger: Optional[StructuredLogger] = None) -> Callable:
             start = time.perf_counter()
             try:
                 result = func(*args, **kwargs)
-                func_logger.debug(func.__name__, execution_time=f"{time.perf_counter() - start:.3f}s")
+                func_logger.debug(
+                    func.__name__, execution_time=f"{time.perf_counter() - start:.3f}s"
+                )
                 return result
             except Exception as exc:
                 func_logger.error(
@@ -166,4 +168,3 @@ def setup_logging() -> None:
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("yfinance").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.INFO)
-
