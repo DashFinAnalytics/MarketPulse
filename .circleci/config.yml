@@ -57,6 +57,7 @@ commands:
       - run:
           name: Install dependencies
           command: uv sync --extra dev
+      - save_dep_cache
 
 # ---------------------------------------------------------------------------
 # Jobs
