@@ -92,13 +92,10 @@ jobs:
       - checkout
       - install_deps
       - run:
-          name: Run mypy type checker
-          command: |
-            uv run mypy \
-              --ignore-missing-imports \
-              --no-error-summary \
-              --explicit-package-bases \
-              config.py database.py app_init.py utils/ page_modules/
+- run:
+            name: Run mypy type checker
+            command: |
+              uv run mypy .
       - store_test_results:
           path: mypy-results
 
