@@ -93,27 +93,22 @@ class TestMemoryCache:
         c = self._make_cache()
         errors = []
 
+        from concurrent.futures import ThreadPoolExecutor
+
         def writer():
-            try:
-                for i in range(100):
-                    c.set(f"key_{i}", i, ttl=30)
-            except Exception as e:
-                errors.append(e)
+            for i in range(100):
+                c.set(f"key_{i}", i, ttl=30)
 
         def reader():
-            try:
-                for i in range(100):
-                    c.get(f"key_{i}")
-            except Exception as e:
-                errors.append(e)
+            for i in range(100):
+                c.get(f"key_{i}")
 
-        threads = [threading.Thread(target=writer) for _ in range(3)] + \
-                  [threading.Thread(target=reader) for _ in range(3)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-        assert errors == [], f"Thread safety errors: {errors}"
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            futures = [executor.submit(writer) for _ in range(3)] + [
+                executor.submit(reader) for _ in range(3)
+            ]
+            for fut in futures:
+                fut.result()
 
 
 # ── cached decorator ─────────────────────────────────────────────────────────
