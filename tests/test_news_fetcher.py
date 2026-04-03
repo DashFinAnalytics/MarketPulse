@@ -28,16 +28,19 @@ def _make_st_stub():
     return stub
 
 
-@pytest.fixture(autouse=True)
+`@pytest.fixture`(autouse=True)
 def mock_streamlit():
     """Ensure streamlit is stubbed before each test in this module."""
-    if "streamlit" not in sys.modules:
-        sys.modules["streamlit"] = _make_st_stub()
+    original_streamlit = sys.modules.get("streamlit")
+    sys.modules["streamlit"] = _make_st_stub()
     # Remove news_fetcher from sys.modules to force reimport with stub
     sys.modules.pop("utils.news_fetcher", None)
     yield
     sys.modules.pop("utils.news_fetcher", None)
-
+    if original_streamlit is None:
+        sys.modules.pop("streamlit", None)
+    else:
+        sys.modules["streamlit"] = original_streamlit
 
 def _get_fetcher():
     """Import and instantiate FinanceNewsFetcher with stub in place."""
