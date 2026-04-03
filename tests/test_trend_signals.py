@@ -31,12 +31,18 @@ def _make_st_stub():
 
 @pytest.fixture(autouse=True)
 def mock_streamlit():
-    if "streamlit" not in sys.modules:
+    original_streamlit = sys.modules.get("streamlit")
+    inserted_stub = False
+    if original_streamlit is None:
         sys.modules["streamlit"] = _make_st_stub()
+        inserted_stub = True
     sys.modules.pop("utils.trend_signals", None)
     yield
     sys.modules.pop("utils.trend_signals", None)
-
+    if inserted_stub:
+        sys.modules.pop("streamlit", None)
+    elif original_streamlit is not None:
+        sys.modules["streamlit"] = original_streamlit
 
 # ── TIMEFRAME_DAYS constant ──────────────────────────────────────────────────
 
