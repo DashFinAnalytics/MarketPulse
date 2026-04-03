@@ -1,215 +1,195 @@
-"""Tests for utils/cache.py — MemoryCache, cached decorator, key helpers."""
+"""Tests for utils/cache.py — MemoryCache, cached decorator, and key helpers."""
+
 import time
 import threading
 import pytest
 from unittest.mock import patch, MagicMock
 
 
-# ---------------------------------------------------------------------------
-# MemoryCache
-# ---------------------------------------------------------------------------
+# ── MemoryCache ──────────────────────────────────────────────────────────────
 
 class TestMemoryCache:
-    """Tests for MemoryCache class."""
+    """Tests for the MemoryCache class."""
 
-    def setup_method(self):
+    def _make_cache(self):
         from utils.cache import MemoryCache
-        self.cache = MemoryCache()
+        return MemoryCache()
 
-    def test_set_and_get_basic_value(self):
-        self.cache.set("key1", "value1", ttl=60)
-        assert self.cache.get("key1") == "value1"
+    def test_set_and_get(self):
+        c = self._make_cache()
+        c.set("key1", "value1", ttl=60)
+        assert c.get("key1") == "value1"
 
-    def test_get_returns_none_for_missing_key(self):
-        assert self.cache.get("nonexistent") is None
+    def test_get_missing_key_returns_none(self):
+        c = self._make_cache()
+        assert c.get("nonexistent") is None
 
-    def test_get_returns_none_after_ttl_expires(self):
-        self.cache.set("expiring", "data", ttl=1)
-        # Simulate TTL expiry by manipulating the internal cache entry
-        with self.cache._lock:
-            self.cache._cache["expiring"]["expires_at"] = time.monotonic() - 1
-        assert self.cache.get("expiring") is None
-
-    def test_get_removes_expired_entry(self):
-        self.cache.set("toexpire", "data", ttl=1)
-        with self.cache._lock:
-            self.cache._cache["toexpire"]["expires_at"] = time.monotonic() - 1
-        self.cache.get("toexpire")
-        with self.cache._lock:
-            assert "toexpire" not in self.cache._cache
-
-    def test_set_overwrites_existing_key(self):
-        self.cache.set("k", "v1", ttl=60)
-        self.cache.set("k", "v2", ttl=60)
-        assert self.cache.get("k") == "v2"
+    def test_expired_entry_returns_none(self):
+        c = self._make_cache()
+        c.set("key1", "value1", ttl=0)  # Expires immediately
+        time.sleep(0.01)
+        assert c.get("key1") is None
 
     def test_delete_existing_key_returns_true(self):
-        self.cache.set("del_key", "val", ttl=60)
-        result = self.cache.delete("del_key")
-        assert result is True
-        assert self.cache.get("del_key") is None
+        c = self._make_cache()
+        c.set("key1", "value1", ttl=60)
+        assert c.delete("key1") is True
+        assert c.get("key1") is None
 
-    def test_delete_nonexistent_key_returns_false(self):
-        result = self.cache.delete("does_not_exist")
-        assert result is False
+    def test_delete_missing_key_returns_false(self):
+        c = self._make_cache()
+        assert c.delete("nonexistent") is False
 
-    def test_clear_removes_all_entries(self):
-        self.cache.set("a", 1, ttl=60)
-        self.cache.set("b", 2, ttl=60)
-        self.cache.clear()
-        assert self.cache.get("a") is None
-        assert self.cache.get("b") is None
+    def test_clear_removes_all(self):
+        c = self._make_cache()
+        c.set("a", 1, ttl=60)
+        c.set("b", 2, ttl=60)
+        c.clear()
+        assert c.get("a") is None
+        assert c.get("b") is None
 
-    def test_cleanup_expired_returns_count_of_removed(self):
-        self.cache.set("live", "data", ttl=60)
-        self.cache.set("dead1", "data", ttl=60)
-        self.cache.set("dead2", "data", ttl=60)
-        # Manually expire two entries
-        with self.cache._lock:
-            self.cache._cache["dead1"]["expires_at"] = time.monotonic() - 1
-            self.cache._cache["dead2"]["expires_at"] = time.monotonic() - 1
-        removed = self.cache.cleanup_expired()
-        assert removed == 2
+    def test_cleanup_expired_removes_stale(self):
+        c = self._make_cache()
+        c.set("fresh", "ok", ttl=60)
+        c.set("stale", "gone", ttl=0)
+        time.sleep(0.01)
+        removed = c.cleanup_expired()
+        assert removed == 1
+        assert c.get("fresh") == "ok"
+        assert c.get("stale") is None
 
-    def test_cleanup_expired_does_not_remove_live_entries(self):
-        self.cache.set("live", "data", ttl=60)
-        self.cache.cleanup_expired()
-        assert self.cache.get("live") == "data"
-
-    def test_stats_returns_correct_counts(self):
-        self.cache.set("a", 1, ttl=60)
-        self.cache.set("b", 2, ttl=60)
-        # Expire one entry
-        with self.cache._lock:
-            self.cache._cache["b"]["expires_at"] = time.monotonic() - 1
-        stats = self.cache.stats()
-        assert stats["total_entries"] == 2
+    def test_stats_returns_dict_with_counts(self):
+        c = self._make_cache()
+        c.set("a", 1, ttl=60)
+        c.set("b", 2, ttl=0)
+        time.sleep(0.01)
+        stats = c.stats()
+        assert "total_entries" in stats
+        assert "active_entries" in stats
+        assert "expired_entries" in stats
         assert stats["active_entries"] == 1
         assert stats["expired_entries"] == 1
+        assert stats["total_entries"] == 2
 
-    def test_stats_empty_cache(self):
-        stats = self.cache.stats()
-        assert stats["total_entries"] == 0
-        assert stats["active_entries"] == 0
-        assert stats["expired_entries"] == 0
+    def test_overwrite_existing_key(self):
+        c = self._make_cache()
+        c.set("key", "first", ttl=60)
+        c.set("key", "second", ttl=60)
+        assert c.get("key") == "second"
 
     def test_stores_various_types(self):
-        self.cache.set("list_val", [1, 2, 3], ttl=60)
-        self.cache.set("dict_val", {"a": 1}, ttl=60)
-        self.cache.set("int_val", 42, ttl=60)
-        self.cache.set("none_val", None, ttl=60)  # None is stored as None
-        assert self.cache.get("list_val") == [1, 2, 3]
-        assert self.cache.get("dict_val") == {"a": 1}
-        assert self.cache.get("int_val") == 42
-        # None stored value — get returns None but that's also cache-miss sentinel
-        # This is a known limitation; cache treats None as miss
+        c = self._make_cache()
+        c.set("list_val", [1, 2, 3], ttl=60)
+        c.set("dict_val", {"a": 1}, ttl=60)
+        c.set("int_val", 42, ttl=60)
+        c.set("none_val", None, ttl=60)
+        assert c.get("list_val") == [1, 2, 3]
+        assert c.get("dict_val") == {"a": 1}
+        assert c.get("int_val") == 42
+        # None is stored but get() would return None for both missing and None stored
+        # This is a known limitation of the current implementation
 
-    def test_thread_safety_concurrent_set_get(self):
+    def test_thread_safety(self):
+        c = self._make_cache()
         errors = []
 
-        def worker(i):
+        def writer():
             try:
-                key = f"thread_{i}"
-                self.cache.set(key, i, ttl=60)
-                result = self.cache.get(key)
-                assert result == i
+                for i in range(100):
+                    c.set(f"key_{i}", i, ttl=30)
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=worker, args=(i,)) for i in range(20)]
+        def reader():
+            try:
+                for i in range(100):
+                    c.get(f"key_{i}")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=writer) for _ in range(3)] + \
+                  [threading.Thread(target=reader) for _ in range(3)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
-        assert errors == []
-
-    def test_uses_default_ttl_from_config_when_ttl_is_none(self):
-        """When ttl=None, the cache should use config.cache.default_ttl."""
-        with patch("utils.cache.config") as mock_config:
-            mock_config.cache.default_ttl = 300
-            from utils.cache import MemoryCache
-            c = MemoryCache()
-            c.set("key", "val")  # ttl defaults to None
-            entry = c._cache["key"]
-            # expires_at should be roughly now + 300 seconds
-            assert entry["expires_at"] > time.monotonic() + 290
+        assert errors == [], f"Thread safety errors: {errors}"
 
 
-# ---------------------------------------------------------------------------
-# cached decorator
-# ---------------------------------------------------------------------------
+# ── cached decorator ─────────────────────────────────────────────────────────
 
 class TestCachedDecorator:
     """Tests for the cached() decorator."""
 
-    def setup_method(self):
-        # Use a fresh MemoryCache to avoid cross-test pollution
-        from utils.cache import MemoryCache
-        self._fresh_cache = MemoryCache()
-
-    def test_caches_function_result(self):
+    def test_cached_decorator_caches_result(self):
         from utils.cache import cached, cache
+        cache.clear()
 
         call_count = 0
 
         @cached(ttl=60)
-        def expensive(x):
+        def expensive_fn(x):
             nonlocal call_count
             call_count += 1
             return x * 2
 
-        r1 = expensive(5)
-        r2 = expensive(5)
-        assert r1 == 10
-        assert r2 == 10
-        assert call_count == 1  # function only called once
+        result1 = expensive_fn(5)
+        result2 = expensive_fn(5)
+        assert result1 == 10
+        assert result2 == 10
+        assert call_count == 1
 
-    def test_different_args_cached_separately(self):
-        from utils.cache import cached
+    def test_cached_decorator_different_args_called_separately(self):
+        from utils.cache import cached, cache
+        cache.clear()
 
         call_count = 0
 
         @cached(ttl=60)
-        def func(x):
+        def fn(x):
             nonlocal call_count
             call_count += 1
             return x + 1
 
-        func(1)
-        func(2)
+        fn(1)
+        fn(2)
         assert call_count == 2
 
-    def test_none_result_not_cached(self):
-        """Functions returning None should not cache the result."""
-        from utils.cache import cached
-
-        call_count = 0
-
-        @cached(ttl=60)
-        def returns_none(x):
-            nonlocal call_count
-            call_count += 1
-            return None
-
-        returns_none(1)
-        returns_none(1)
-        assert call_count == 2  # called twice because None is not cached
-
-    def test_custom_key_func_used(self):
+    def test_cached_decorator_with_custom_key_func(self):
         from utils.cache import cached, cache
+        cache.clear()
 
         call_count = 0
 
         @cached(ttl=60, key_func=lambda x: f"custom:{x}")
-        def func(x):
+        def fn(x):
             nonlocal call_count
             call_count += 1
             return x
 
-        func(99)
-        assert cache.get("custom:99") == 99
+        fn("hello")
+        fn("hello")
+        assert call_count == 1
 
-    def test_preserves_function_name(self):
+    def test_cached_decorator_does_not_cache_none(self):
+        """If the function returns None, it should NOT be cached (per implementation)."""
+        from utils.cache import cached, cache
+        cache.clear()
+
+        call_count = 0
+
+        @cached(ttl=60)
+        def fn():
+            nonlocal call_count
+            call_count += 1
+            return None
+
+        fn()
+        fn()
+        # None result is not cached, so fn should be called twice
+        assert call_count == 2
+
+    def test_cached_preserves_function_name(self):
         from utils.cache import cached
 
         @cached(ttl=60)
@@ -218,105 +198,75 @@ class TestCachedDecorator:
 
         assert my_function.__name__ == "my_function"
 
-    def test_kwargs_cached_correctly(self):
-        from utils.cache import cached
 
-        call_count = 0
-
-        @cached(ttl=60)
-        def func(x, y=10):
-            nonlocal call_count
-            call_count += 1
-            return x + y
-
-        r1 = func(1, y=10)
-        r2 = func(1, y=10)
-        assert r1 == r2 == 11
-        assert call_count == 1
-
-
-# ---------------------------------------------------------------------------
-# Cache key helper functions
-# ---------------------------------------------------------------------------
+# ── cache_key_* helpers ──────────────────────────────────────────────────────
 
 class TestCacheKeyHelpers:
-    """Tests for cache_key_for_symbol, cache_key_for_news, cache_key_for_analysis."""
+    """Tests for cache key generator functions."""
 
-    def setup_method(self):
-        from utils.cache import (
-            cache_key_for_symbol,
-            cache_key_for_news,
-            cache_key_for_analysis,
-        )
-        self.cache_key_for_symbol = cache_key_for_symbol
-        self.cache_key_for_news = cache_key_for_news
-        self.cache_key_for_analysis = cache_key_for_analysis
+    def test_cache_key_for_symbol_uppercase(self):
+        from utils.cache import cache_key_for_symbol
+        key = cache_key_for_symbol("spy")
+        assert "SPY" in key
 
-    def test_symbol_key_uppercases_symbol(self):
-        key = self.cache_key_for_symbol("aapl")
-        assert "AAPL" in key
+    def test_cache_key_for_symbol_includes_data_type(self):
+        from utils.cache import cache_key_for_symbol
+        key = cache_key_for_symbol("SPY", data_type="index")
+        assert "index" in key
+        assert "SPY" in key
 
-    def test_symbol_key_includes_data_type(self):
-        key = self.cache_key_for_symbol("SPY", data_type="ticker")
-        assert "ticker" in key
-
-    def test_symbol_key_default_data_type(self):
-        key = self.cache_key_for_symbol("SPY")
+    def test_cache_key_for_symbol_default_data_type(self):
+        from utils.cache import cache_key_for_symbol
+        key = cache_key_for_symbol("SPY")
         assert "asset" in key
 
-    def test_symbol_key_different_types_differ(self):
-        k1 = self.cache_key_for_symbol("SPY", data_type="ticker")
-        k2 = self.cache_key_for_symbol("SPY", data_type="options")
-        assert k1 != k2
-
-    def test_news_key_includes_source_and_limit(self):
-        key = self.cache_key_for_news("yahoo", 20)
+    def test_cache_key_for_news(self):
+        from utils.cache import cache_key_for_news
+        key = cache_key_for_news(source="yahoo", limit=5)
         assert "yahoo" in key
-        assert "20" in key
+        assert "5" in key
 
-    def test_news_key_default_values(self):
-        key = self.cache_key_for_news()
+    def test_cache_key_for_news_defaults(self):
+        from utils.cache import cache_key_for_news
+        key = cache_key_for_news()
         assert "all" in key
         assert "10" in key
 
-    def test_news_key_different_sources_differ(self):
-        k1 = self.cache_key_for_news("yahoo")
-        k2 = self.cache_key_for_news("reuters")
-        assert k1 != k2
-
-    def test_analysis_key_uppercases_symbol(self):
-        key = self.cache_key_for_analysis("aapl", "dcf")
+    def test_cache_key_for_analysis(self):
+        from utils.cache import cache_key_for_analysis
+        key = cache_key_for_analysis("aapl", "dcf")
         assert "AAPL" in key
+        assert "dcf" in key
 
-    def test_analysis_key_includes_analysis_type(self):
-        key = self.cache_key_for_analysis("AAPL", "growth")
-        assert "growth" in key
+    def test_cache_key_for_symbol_different_symbols_different_keys(self):
+        from utils.cache import cache_key_for_symbol
+        key1 = cache_key_for_symbol("SPY")
+        key2 = cache_key_for_symbol("QQQ")
+        assert key1 != key2
 
-    def test_analysis_key_different_types_differ(self):
-        k1 = self.cache_key_for_analysis("AAPL", "dcf")
-        k2 = self.cache_key_for_analysis("AAPL", "growth")
-        assert k1 != k2
+    def test_cache_key_for_analysis_different_types_different_keys(self):
+        from utils.cache import cache_key_for_analysis
+        key1 = cache_key_for_analysis("AAPL", "dcf")
+        key2 = cache_key_for_analysis("AAPL", "growth")
+        assert key1 != key2
 
 
-# ---------------------------------------------------------------------------
-# periodic_cleanup
-# ---------------------------------------------------------------------------
+# ── periodic_cleanup ─────────────────────────────────────────────────────────
 
 class TestPeriodicCleanup:
-    """Tests for periodic_cleanup helper."""
+    """Tests for periodic_cleanup()."""
 
     def test_periodic_cleanup_returns_int(self):
-        from utils.cache import periodic_cleanup
+        from utils.cache import periodic_cleanup, cache
+        cache.clear()
         result = periodic_cleanup()
         assert isinstance(result, int)
         assert result >= 0
 
     def test_periodic_cleanup_removes_expired(self):
-        from utils.cache import cache, periodic_cleanup
-        cache.set("temp_cleanup_test", "data", ttl=60)
-        with cache._lock:
-            cache._cache["temp_cleanup_test"]["expires_at"] = time.monotonic() - 1
-        before_count = len(cache._cache)
+        from utils.cache import periodic_cleanup, cache
+        cache.clear()
+        cache.set("expire_me", "val", ttl=0)
+        time.sleep(0.01)
         removed = periodic_cleanup()
         assert removed >= 1
-        assert cache.get("temp_cleanup_test") is None

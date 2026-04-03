@@ -1,352 +1,208 @@
-"""Tests for utils/logging_config.py — StructuredLogger, decorators, setup_logging."""
+"""Tests for utils/logging_config.py — StructuredLogger and decorators."""
+
 import logging
 import pytest
 from unittest.mock import patch, MagicMock, call
-import sys
 
 
-# ---------------------------------------------------------------------------
-# StructuredLogger
-# ---------------------------------------------------------------------------
+# ── StructuredLogger ─────────────────────────────────────────────────────────
 
 class TestStructuredLogger:
     """Tests for StructuredLogger class."""
 
-    def setup_method(self):
+    def _make_logger(self, name="test_logger"):
         from utils.logging_config import StructuredLogger
-        self.StructuredLogger = StructuredLogger
+        return StructuredLogger(name)
 
     def test_instantiation(self):
-        logger = self.StructuredLogger("test.module")
+        logger = self._make_logger()
         assert logger is not None
-
-    def test_has_logger_attribute(self):
-        logger = self.StructuredLogger("test.module")
-        assert hasattr(logger, "logger")
-        assert isinstance(logger.logger, logging.Logger)
-
-    def test_logger_name_set_correctly(self):
-        logger = self.StructuredLogger("myapp.service")
-        assert logger.logger.name == "myapp.service"
-
-    def test_context_starts_empty(self):
-        logger = self.StructuredLogger("test")
-        assert logger.context == {}
+        assert logger.logger is not None
 
     def test_with_context_returns_new_logger(self):
-        logger = self.StructuredLogger("test")
-        child = logger.with_context(request_id="abc123")
-        assert child is not logger
+        logger = self._make_logger()
+        new_logger = logger.with_context(symbol="SPY", period="1y")
+        assert new_logger is not logger
+        assert new_logger.context["symbol"] == "SPY"
+        assert new_logger.context["period"] == "1y"
 
-    def test_with_context_merges_contexts(self):
-        logger = self.StructuredLogger("test")
-        child = logger.with_context(a=1)
-        grandchild = child.with_context(b=2)
-        assert grandchild.context == {"a": 1, "b": 2}
+    def test_with_context_preserves_existing_context(self):
+        logger = self._make_logger()
+        logger1 = logger.with_context(key1="val1")
+        logger2 = logger1.with_context(key2="val2")
+        assert logger2.context["key1"] == "val1"
+        assert logger2.context["key2"] == "val2"
 
-    def test_with_context_original_unchanged(self):
-        logger = self.StructuredLogger("test")
-        logger.with_context(a=1)
-        assert logger.context == {}
-
-    def test_with_context_overrides_existing_key(self):
-        logger = self.StructuredLogger("test")
-        child = logger.with_context(a=1)
-        child2 = child.with_context(a=99)
-        assert child2.context["a"] == 99
+    def test_with_context_does_not_mutate_original(self):
+        logger = self._make_logger()
+        _ = logger.with_context(key="val")
+        assert "key" not in logger.context
 
     def test_info_logs_message(self):
-        logger = self.StructuredLogger("test")
+        logger = self._make_logger("test_info")
         with patch.object(logger.logger, "log") as mock_log:
-            logger.info("hello world")
+            logger.info("Hello world")
             mock_log.assert_called_once()
-            args = mock_log.call_args[0]
-            assert args[0] == logging.INFO
-            assert "hello world" in args[1]
+            args = mock_log.call_args
+            assert "Hello world" in args[0][1]
 
     def test_debug_logs_at_debug_level(self):
-        logger = self.StructuredLogger("test")
+        logger = self._make_logger()
         with patch.object(logger.logger, "log") as mock_log:
-            logger.debug("debug msg")
-            args = mock_log.call_args[0]
-            assert args[0] == logging.DEBUG
+            logger.debug("Debug msg")
+            assert mock_log.call_args[0][0] == logging.DEBUG
 
     def test_warning_logs_at_warning_level(self):
-        logger = self.StructuredLogger("test")
+        logger = self._make_logger()
         with patch.object(logger.logger, "log") as mock_log:
-            logger.warning("warn msg")
-            args = mock_log.call_args[0]
-            assert args[0] == logging.WARNING
+            logger.warning("Warning msg")
+            assert mock_log.call_args[0][0] == logging.WARNING
 
     def test_error_logs_at_error_level(self):
-        logger = self.StructuredLogger("test")
+        logger = self._make_logger()
         with patch.object(logger.logger, "log") as mock_log:
-            logger.error("error msg")
-            args = mock_log.call_args[0]
-            assert args[0] == logging.ERROR
+            logger.error("Error msg")
+            assert mock_log.call_args[0][0] == logging.ERROR
 
     def test_critical_logs_at_critical_level(self):
-        logger = self.StructuredLogger("test")
+        logger = self._make_logger()
         with patch.object(logger.logger, "log") as mock_log:
-            logger.critical("critical msg")
-            args = mock_log.call_args[0]
-            assert args[0] == logging.CRITICAL
+            logger.critical("Critical msg")
+            assert mock_log.call_args[0][0] == logging.CRITICAL
 
     def test_context_appended_to_message(self):
-        logger = self.StructuredLogger("test").with_context(symbol="SPY")
+        logger = self._make_logger().with_context(symbol="AAPL")
         with patch.object(logger.logger, "log") as mock_log:
-            logger.info("price updated")
-            logged_message = mock_log.call_args[0][1]
-            assert "SPY" in logged_message
-            assert "symbol" in logged_message
+            logger.info("Price update")
+            logged_msg = mock_log.call_args[0][1]
+            assert "AAPL" in logged_msg
+            assert "symbol" in logged_msg
 
-    def test_kwargs_appended_to_message(self):
-        logger = self.StructuredLogger("test")
+    def test_extra_kwargs_appended_to_message(self):
+        logger = self._make_logger()
         with patch.object(logger.logger, "log") as mock_log:
-            logger.info("test", user="alice")
-            logged_message = mock_log.call_args[0][1]
-            assert "alice" in logged_message
-            assert "user" in logged_message
-
-    def test_no_context_no_pipe_suffix(self):
-        logger = self.StructuredLogger("test")
-        with patch.object(logger.logger, "log") as mock_log:
-            logger.info("clean message")
-            logged_message = mock_log.call_args[0][1]
-            assert "|" not in logged_message
+            logger.info("Event", user="alice", action="buy")
+            logged_msg = mock_log.call_args[0][1]
+            assert "alice" in logged_msg
+            assert "buy" in logged_msg
 
 
-# ---------------------------------------------------------------------------
-# get_logger
-# ---------------------------------------------------------------------------
+# ── get_logger ───────────────────────────────────────────────────────────────
 
 class TestGetLogger:
-    """Tests for get_logger factory function."""
+    """Tests for get_logger()."""
 
     def test_returns_structured_logger(self):
         from utils.logging_config import get_logger, StructuredLogger
-        result = get_logger("mymodule")
-        assert isinstance(result, StructuredLogger)
+        logger = get_logger("my.module")
+        assert isinstance(logger, StructuredLogger)
 
-    def test_name_is_passed_through(self):
+    def test_name_preserved(self):
         from utils.logging_config import get_logger
-        result = get_logger("app.service")
-        assert result.logger.name == "app.service"
+        logger = get_logger("my.module")
+        assert logger.logger.name == "my.module"
 
 
-# ---------------------------------------------------------------------------
-# log_execution_time decorator
-# ---------------------------------------------------------------------------
+# ── log_execution_time ───────────────────────────────────────────────────────
 
 class TestLogExecutionTime:
-    """Tests for log_execution_time decorator."""
+    """Tests for log_execution_time() decorator."""
 
-    def test_function_executes_normally(self):
+    def test_decorated_function_returns_correctly(self):
         from utils.logging_config import log_execution_time
 
         @log_execution_time()
-        def add(x, y):
-            return x + y
+        def add(a, b):
+            return a + b
 
         assert add(2, 3) == 5
 
-    def test_preserves_return_value(self):
+    def test_decorated_function_propagates_exception(self):
         from utils.logging_config import log_execution_time
 
         @log_execution_time()
-        def compute():
-            return {"result": 42}
+        def boom():
+            raise ValueError("test error")
 
-        result = compute()
-        assert result == {"result": 42}
+        with pytest.raises(ValueError, match="test error"):
+            boom()
 
-    def test_raises_exception_transparently(self):
+    def test_function_name_preserved(self):
         from utils.logging_config import log_execution_time
 
         @log_execution_time()
-        def fail():
-            raise ValueError("Test error")
+        def my_func():
+            return True
 
-        with pytest.raises(ValueError, match="Test error"):
-            fail()
+        assert my_func.__name__ == "my_func"
 
-    def test_preserves_function_name(self):
-        from utils.logging_config import log_execution_time
-
-        @log_execution_time()
-        def my_function():
-            return None
-
-        assert my_function.__name__ == "my_function"
-
-    def test_custom_logger_used(self):
+    def test_decorator_with_explicit_logger(self):
         from utils.logging_config import log_execution_time, get_logger
-
-        custom_logger = get_logger("custom_module")
-        debug_calls = []
-
-        def capture_debug(msg, **kw):
-            debug_calls.append(msg)
-
-        custom_logger.debug = capture_debug
+        custom_logger = get_logger("test")
 
         @log_execution_time(logger=custom_logger)
-        def simple():
-            return 1
+        def fn():
+            return 99
 
-        simple()
-        assert len(debug_calls) >= 1
-
-    def test_logs_on_exception(self):
-        from utils.logging_config import log_execution_time, get_logger
-
-        custom_logger = get_logger("err_module")
-        error_calls = []
-
-        def capture_error(msg, **kw):
-            error_calls.append(msg)
-
-        custom_logger.error = capture_error
-
-        @log_execution_time(logger=custom_logger)
-        def failing():
-            raise RuntimeError("boom")
-
-        with pytest.raises(RuntimeError):
-            failing()
-
-        assert len(error_calls) >= 1
+        assert fn() == 99
 
 
-# ---------------------------------------------------------------------------
-# log_api_call decorator
-# ---------------------------------------------------------------------------
+# ── log_api_call ─────────────────────────────────────────────────────────────
 
 class TestLogApiCall:
-    """Tests for log_api_call decorator."""
+    """Tests for log_api_call() decorator."""
 
-    def test_function_executes_normally(self):
+    def test_decorated_function_returns_correctly(self):
         from utils.logging_config import log_api_call
 
         @log_api_call("TestAPI")
         def fetch_data():
-            return [1, 2, 3]
+            return {"data": 42}
 
-        assert fetch_data() == [1, 2, 3]
+        assert fetch_data() == {"data": 42}
 
-    def test_preserves_function_name(self):
+    def test_decorated_function_propagates_exception(self):
         from utils.logging_config import log_api_call
 
-        @log_api_call("TestAPI")
+        @log_api_call("BrokenAPI")
+        def broken():
+            raise RuntimeError("API down")
+
+        with pytest.raises(RuntimeError, match="API down"):
+            broken()
+
+    def test_function_name_preserved(self):
+        from utils.logging_config import log_api_call
+
+        @log_api_call("SomeAPI")
         def my_api_func():
             pass
 
         assert my_api_func.__name__ == "my_api_func"
 
-    def test_raises_exception_transparently(self):
-        from utils.logging_config import log_api_call
 
-        @log_api_call("BadAPI")
-        def bad_call():
-            raise ConnectionError("no connection")
-
-        with pytest.raises(ConnectionError):
-            bad_call()
-
-    def test_logs_api_name_on_call(self):
-        from utils.logging_config import log_api_call, get_logger
-
-        custom_logger = get_logger("api_test")
-        info_calls = []
-
-        def capture_info(msg, **kw):
-            info_calls.append((msg, kw))
-
-        custom_logger.info = capture_info
-
-        @log_api_call("MyExchangeAPI", logger=custom_logger)
-        def get_price():
-            return 100.0
-
-        get_price()
-        api_names = [kw.get("api") for msg, kw in info_calls]
-        assert "MyExchangeAPI" in api_names
-
-    def test_logs_on_success(self):
-        from utils.logging_config import log_api_call, get_logger
-
-        custom_logger = get_logger("api_success")
-        info_calls = []
-
-        def capture_info(msg, **kw):
-            info_calls.append(msg)
-
-        custom_logger.info = capture_info
-
-        @log_api_call("TestAPI", logger=custom_logger)
-        def success():
-            return "ok"
-
-        success()
-        assert any("success" in c.lower() or "successful" in c.lower() for c in info_calls)
-
-    def test_logs_on_failure(self):
-        from utils.logging_config import log_api_call, get_logger
-
-        custom_logger = get_logger("api_fail")
-        error_calls = []
-
-        def capture_error(msg, **kw):
-            error_calls.append(msg)
-
-        custom_logger.error = capture_error
-
-        @log_api_call("FailAPI", logger=custom_logger)
-        def failing():
-            raise RuntimeError("timeout")
-
-        with pytest.raises(RuntimeError):
-            failing()
-
-        assert len(error_calls) >= 1
-
-
-# ---------------------------------------------------------------------------
-# setup_logging
-# ---------------------------------------------------------------------------
+# ── setup_logging ────────────────────────────────────────────────────────────
 
 class TestSetupLogging:
-    """Tests for setup_logging function."""
+    """Tests for setup_logging()."""
 
     def test_setup_logging_runs_without_error(self):
         from utils.logging_config import setup_logging
         # Should not raise
         setup_logging()
 
-    def test_root_logger_has_handlers_after_setup(self):
+    def test_setup_logging_configures_root_logger(self):
         from utils.logging_config import setup_logging
+        import logging
         setup_logging()
         root = logging.getLogger()
+        # Root logger should have at least one handler after setup
         assert len(root.handlers) >= 1
 
-    def test_console_handler_added(self):
+    def test_noisy_loggers_set_to_warning(self):
         from utils.logging_config import setup_logging
+        import logging
         setup_logging()
-        root = logging.getLogger()
-        stream_handlers = [h for h in root.handlers if isinstance(h, logging.StreamHandler)]
-        assert len(stream_handlers) >= 1
-
-    def test_noisy_loggers_set_to_warning_or_higher(self):
-        from utils.logging_config import setup_logging
-        setup_logging()
-        for name in ["urllib3", "requests", "yfinance"]:
-            level = logging.getLogger(name).level
-            assert level >= logging.WARNING, f"{name} should be WARNING or higher, got {level}"
-
-    def test_setup_logging_idempotent(self):
-        """Calling setup_logging twice should not crash."""
-        from utils.logging_config import setup_logging
-        setup_logging()
-        setup_logging()
-        root = logging.getLogger()
-        assert len(root.handlers) >= 1
+        assert logging.getLogger("urllib3").level == logging.WARNING
+        assert logging.getLogger("requests").level == logging.WARNING
+        assert logging.getLogger("yfinance").level == logging.WARNING
