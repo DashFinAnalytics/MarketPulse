@@ -279,6 +279,9 @@ class TestJobs:
             assert f"import {module}" in all_cmds, (
                 f"smoke_test does not validate import of '{module}'"
             )
+        assert "utils" in all_cmds, (
+            "smoke_test does not validate utils imports"
+        )
 
     def test_all_jobs_use_small_resource_class(self, ci_config: dict) -> None:
         for job_name in EXPECTED_JOBS:
