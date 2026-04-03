@@ -72,12 +72,9 @@ jobs:
       - install_deps
       - run:
           name: Run ruff linter
-          command: |
-            uv run ruff check .
-            uv run ruff check . --output-format=json --output-file=ruff-report.json
-      - run:
-          name: Check black formatting
-          command: uv run black --check --diff .
+- run:
+           name: Run ruff linter and format check
+           command: uv run ruff check . && uv run ruff format --check .
       - store_artifacts:
           path: ruff-report.json
           destination: lint/ruff-report.json
