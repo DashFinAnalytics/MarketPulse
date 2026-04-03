@@ -71,10 +71,8 @@ jobs:
       - checkout
       - install_deps
       - run:
-          name: Run ruff linter
-- run:
-           name: Run ruff linter and format check
-           command: uv run ruff check . && uv run ruff format --check .
+          name: Run ruff linter and format check
+          command: uv run ruff check . && uv run ruff format --check .
       - store_artifacts:
           path: ruff-report.json
           destination: lint/ruff-report.json
