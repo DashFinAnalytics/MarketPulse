@@ -81,7 +81,7 @@ class TestGetMarketStatus:
     def test_after_hours(self):
         from utils.market_status import get_market_status
         et = pytz.timezone("America/New_York")
-        # Monday 17:00 ET (after-hours: 4pm–8pm)
+        # Monday 17:00 ET (after-hours: 4pm-8pm)
         monday = et.localize(datetime(2024, 1, 8, 17, 0))
         with patch("utils.market_status.datetime") as mock_dt:
             mock_dt.now.return_value = monday
