@@ -10,8 +10,6 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 # Ensure streamlit is mocked before importing news_fetcher
 # (conftest.py handles this at collection time; this guard is belt-and-suspenders)
 if "streamlit" not in sys.modules:
