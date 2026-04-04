@@ -121,8 +121,11 @@ if "yfinance" not in sys.modules:
 # numpy / pandas - usually available but guard just in case
 # ---------------------------------------------------------------------------
 try:
-    import numpy  # noqa: F401
-    import pandas  # noqa: F401
+    import numpy
+    import pandas
+    # Ensure real modules are visible even if imported lazily elsewhere
+    sys.modules.setdefault("numpy", numpy)
+    sys.modules.setdefault("pandas", pandas)
 except ImportError:
     sys.modules.setdefault("numpy", MagicMock(name="numpy"))
     sys.modules.setdefault("pandas", MagicMock(name="pandas"))
