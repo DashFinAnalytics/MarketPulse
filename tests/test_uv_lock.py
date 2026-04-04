@@ -107,7 +107,7 @@ class TestLockFileIntegrity:
         )
 
     def test_urllib3_version_satisfies_pyproject_constraint(
-        self, uv_lock_content, uv_lock_content_as_version=None
+        self, uv_lock_content
     ):
         """
         The locked urllib3 version (2.6.3) must satisfy the pyproject.toml
