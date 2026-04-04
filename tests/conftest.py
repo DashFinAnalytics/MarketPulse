@@ -10,6 +10,13 @@ import pytest
 
 # ---------------------------------------------------------------------------
 # Streamlit mock - injected before any module that imports streamlit is loaded
+
+@pytest.fixture(autouse=True)
+def mock_streamlit(monkeypatch):
+    mock_st = MagicMock()
+    # Configure mock_st.cache_data, etc.
+    monkeypatch.setitem(sys.modules, "streamlit", mock_st)
+    yield mock_st
 # ---------------------------------------------------------------------------
 
 def _make_streamlit_mock() -> MagicMock:
