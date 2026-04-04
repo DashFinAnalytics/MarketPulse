@@ -20,3 +20,8 @@ dependencies = [
     "trafilatura>=2.0.0",
     "yfinance>=0.2.64",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
