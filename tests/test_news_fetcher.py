@@ -28,7 +28,7 @@ def _make_st_stub():
     return stub
 
 
-`@pytest.fixture`(autouse=True)
+@pytest.fixture(autouse=True)
 def mock_streamlit():
     """Ensure streamlit is stubbed before each test in this module."""
     original_streamlit = sys.modules.get("streamlit")
