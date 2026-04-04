@@ -475,8 +475,8 @@ class TestGetDbSession:
             with pytest.raises(DatabaseError):
                 with pr2_db.get_db_session() as session:
                     raise ValueError("something bad")
-        mock_session.rollback.assert_called_once()
-        mock_session.close.assert_called_once()
+                mock_session.rollback.assert_called_once()
+                mock_session.close.assert_called_once()
 
     def test_reraises_database_error_unchanged(self):
         mock_session = MagicMock()
