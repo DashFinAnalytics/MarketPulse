@@ -12,7 +12,7 @@ import json
 import sys
 import uuid
 from contextlib import contextmanager
-from typing import Dict, List, Optional
+from typing import List, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
