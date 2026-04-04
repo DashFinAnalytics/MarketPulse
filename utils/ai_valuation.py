@@ -267,6 +267,7 @@ Provide your analysis in JSON format with the following structure:
 
 Focus on cash flow projections, appropriate discount rates, and terminal value calculations."""
 
+
 @st.cache_data(ttl=3600)
 def get_market_comparables(_self, symbol: str, sector: str, industry: str) -> Optional[str]:
     """

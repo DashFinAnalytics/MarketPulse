@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = None
 SessionLocal = None
+
+
 class Base(DeclarativeBase):
     pass
 
