@@ -1,7 +1,8 @@
-import os
 import json
 import logging
-from typing import Dict, Optional, List
+import os
+from typing import Dict, Optional
+
 import streamlit as st
 
 # Note: Using the blueprint:python_openai integration
@@ -14,11 +15,12 @@ logger = logging.getLogger(__name__)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 openai_client = None
 
+
 class AIValuationAnalyzer:
     """
     AI-powered fundamental analysis and valuation using multiple investment frameworks
     """
-    
+
     def __init__(self):
         global openai_client
         if openai_client is None:
@@ -27,10 +29,12 @@ class AIValuationAnalyzer:
             except Exception as e:
                 logger.error(f"Failed to initialize OpenAI client: {str(e)}")
                 openai_client = None
-        self.client = openai_client
+        self.client: Optional[OpenAI] = openai_client
         self.model = "gpt-5"
-    
-    def analyze_fundamentals(self, metrics: Dict, valuation_model: str = "comprehensive") -> Optional[Dict]:
+
+    def analyze_fundamentals(
+        self, metrics: Dict, valuation_model: str = "comprehensive"
+    ) -> Optional[Dict]:
         """
         Analyze company fundamentals using AI
         Args:
@@ -42,10 +46,10 @@ class AIValuationAnalyzer:
         try:
             if not metrics:
                 return None
-            
+
             # Prepare financial data summary
             financial_summary = self._prepare_financial_summary(metrics)
-            
+
             # Select appropriate prompt based on valuation model
             if valuation_model == "growth":
                 prompt = self._get_growth_investing_prompt(financial_summary, metrics)
@@ -55,90 +59,114 @@ class AIValuationAnalyzer:
                 prompt = self._get_dcf_prompt(financial_summary, metrics)
             else:  # comprehensive
                 prompt = self._get_comprehensive_prompt(financial_summary, metrics)
-            
+
             # Call OpenAI API
+            if self.client is None:
+                logger.error("OpenAI client is not initialized")
+                return {
+                    "error": "OpenAI client not available",
+                    "symbol": metrics.get("symbol", "N/A"),
+                    "valuation_model": valuation_model,
+                }
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         "role": "system",
                         "content": "You are an expert financial analyst with deep knowledge of "
-                                   "fundamental analysis, valuation models, and investment strategies. "
-                                   "Provide detailed, data-driven analysis with specific insights. "
-                                   "Always respond in JSON format."
+                        "fundamental analysis, valuation models, and investment strategies. "
+                        "Provide detailed, data-driven analysis with specific insights. "
+                        "Always respond in JSON format.",
                     },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
+                    {"role": "user", "content": prompt},
                 ],
                 response_format={"type": "json_object"},
-                max_completion_tokens=4096
+                max_completion_tokens=4096,
             )
-            
+
             # Parse response
-            result = json.loads(response.choices[0].message.content)
-            result['valuation_model'] = valuation_model
-            result['symbol'] = metrics.get('symbol', 'N/A')
-            
+            content = response.choices[0].message.content
+            if not isinstance(content, (str, bytes, bytearray)):
+                logger.error(f"Invalid response content type: {type(content)}")
+                return None
+
+            result = json.loads(content)
+            result["valuation_model"] = valuation_model
+            result["symbol"] = metrics.get("symbol", "N/A")
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Error in AI valuation analysis: {str(e)}")
             return {
-                'error': str(e),
-                'symbol': metrics.get('symbol', 'N/A'),
-                'valuation_model': valuation_model
+                "error": str(e),
+                "symbol": metrics.get("symbol", "N/A"),
+                "valuation_model": valuation_model,
             }
-    
+
     def _prepare_financial_summary(self, metrics: Dict) -> str:
         """Prepare a concise financial summary for AI analysis"""
         summary_parts = []
-        
-        summary_parts.append(f"Company: {metrics.get('company_name', metrics.get('symbol', 'Unknown'))}")
+
+        summary_parts.append(
+            f"Company: {metrics.get('company_name', metrics.get('symbol', 'Unknown'))}"
+        )
         summary_parts.append(f"Symbol: {metrics.get('symbol', 'N/A')}")
         summary_parts.append(f"Sector: {metrics.get('sector', 'N/A')}")
         summary_parts.append(f"Industry: {metrics.get('industry', 'N/A')}")
         summary_parts.append(f"Period: {metrics.get('period', 'N/A')}")
-        
-        if metrics.get('current_price'):
+
+        if metrics.get("current_price"):
             summary_parts.append(f"Current Price: ${metrics['current_price']:.2f}")
-        if metrics.get('market_cap'):
+        if metrics.get("market_cap"):
             summary_parts.append(f"Market Cap: ${metrics['market_cap']:,.0f}")
-        if metrics.get('pe_ratio'):
+        if metrics.get("pe_ratio"):
             summary_parts.append(f"P/E Ratio: {metrics['pe_ratio']:.2f}")
-        
+
         # Revenue data
-        if 'revenue' in metrics:
-            revenue_str = "Revenue: " + ", ".join([f"${r/1e9:.2f}B" if r else "N/A" 
-                                                   for r in metrics['revenue'][:8]])
+        if "revenue" in metrics:
+            revenue_str = "Revenue: " + ", ".join(
+                [f"${r / 1e9:.2f}B" if r else "N/A" for r in metrics["revenue"][:8]]
+            )
             summary_parts.append(revenue_str)
-        
+
         # Net income data
-        if 'net_income' in metrics:
-            ni_str = "Net Income: " + ", ".join([f"${ni/1e9:.2f}B" if ni and ni > 0 else f"-${abs(ni)/1e9:.2f}B" if ni else "N/A" 
-                                                 for ni in metrics['net_income'][:8]])
+        if "net_income" in metrics:
+            ni_str = "Net Income: " + ", ".join(
+                [
+                    f"${ni / 1e9:.2f}B"
+                    if ni and ni > 0
+                    else f"-${abs(ni) / 1e9:.2f}B"
+                    if ni
+                    else "N/A"
+                    for ni in metrics["net_income"][:8]
+                ]
+            )
             summary_parts.append(ni_str)
-        
+
         # Operating income
-        if 'operating_income' in metrics:
-            oi_str = "Operating Income: " + ", ".join([f"${oi/1e9:.2f}B" if oi else "N/A" 
-                                                       for oi in metrics['operating_income'][:8]])
+        if "operating_income" in metrics:
+            oi_str = "Operating Income: " + ", ".join(
+                [f"${oi / 1e9:.2f}B" if oi else "N/A" for oi in metrics["operating_income"][:8]]
+            )
             summary_parts.append(oi_str)
-        
+
         # Cash flow
-        if 'free_cashflow' in metrics:
-            fcf_str = "Free Cash Flow: " + ", ".join([f"${fcf/1e9:.2f}B" if fcf else "N/A" 
-                                                      for fcf in metrics['free_cashflow'][:8]])
+        if "free_cashflow" in metrics:
+            fcf_str = "Free Cash Flow: " + ", ".join(
+                [f"${fcf / 1e9:.2f}B" if fcf else "N/A" for fcf in metrics["free_cashflow"][:8]]
+            )
             summary_parts.append(fcf_str)
-        
+
         return "\n".join(summary_parts)
-    
+
     def _get_comprehensive_prompt(self, financial_summary: str, metrics: Dict) -> str:
         """Get comprehensive analysis prompt"""
-        return f"""Analyze the following company's financials and provide a comprehensive investment analysis.
+        return f"""Analyze the following company's financials and provide
+        a comprehensive investment analysis.
 
-{financial_summary}
+        {financial_summary}
 
 Provide your analysis in JSON format with the following structure:
 {{
@@ -157,12 +185,13 @@ Provide your analysis in JSON format with the following structure:
 }}
 
 Focus on data-driven insights based on the historical trends and current metrics."""
-    
+
     def _get_growth_investing_prompt(self, financial_summary: str, metrics: Dict) -> str:
         """Get growth investing focused prompt"""
-        return f"""Analyze this company from a GROWTH INVESTING perspective (think Peter Lynch, Phil Fisher style).
+        return f"""Analyze this company from a GROWTH INVESTING perspective
+        (think Peter Lynch, Phil Fisher style).
 
-{financial_summary}
+        {financial_summary}
 
 Provide your analysis in JSON format with the following structure:
 {{
@@ -183,18 +212,19 @@ Provide your analysis in JSON format with the following structure:
 }}
 
 Focus on growth metrics, scalability, and future potential."""
-    
+
     def _get_value_investing_prompt(self, financial_summary: str, metrics: Dict) -> str:
         """Get value investing focused prompt"""
-        return f"""Analyze this company from a VALUE INVESTING perspective (think Warren Buffett, Benjamin Graham style).
+        return f"""Analyze this company from a VALUE INVESTING perspective
+        (think Warren Buffett, Benjamin Graham style).
 
-{financial_summary}
+        {financial_summary}
 
 Provide your analysis in JSON format with the following structure:
 {{
     "value_rating": "Exceptional Value/Good Value/Fair Value/Overvalued/Significantly Overvalued",
     "confidence_score": 0-100,
-    "intrinsic_value_assessment": "is the current price below intrinsic value?",
+    "intrinsic_value_assessment": "Yes - brief explanation or No - brief explanation",
     "margin_of_safety": "estimated margin of safety percentage",
     "quality_of_earnings": "assessment of earnings quality and sustainability",
     "balance_sheet_strength": "analysis of financial health and debt levels",
@@ -210,12 +240,12 @@ Provide your analysis in JSON format with the following structure:
 }}
 
 Focus on safety, quality, valuation multiples, and downside protection."""
-    
+
     def _get_dcf_prompt(self, financial_summary: str, metrics: Dict) -> str:
         """Get DCF valuation focused prompt"""
         return f"""Perform a DISCOUNTED CASH FLOW (DCF) valuation analysis for this company.
 
-{financial_summary}
+        {financial_summary}
 
 Provide your analysis in JSON format with the following structure:
 {{
@@ -236,53 +266,60 @@ Provide your analysis in JSON format with the following structure:
 }}
 
 Focus on cash flow projections, appropriate discount rates, and terminal value calculations."""
-    
-    @st.cache_data(ttl=3600)
-    def get_market_comparables(_self, symbol: str, sector: str, industry: str) -> Optional[str]:
-        """
-        Get AI-powered market comparables analysis
-        """
-        try:
-            prompt = f"""Provide a brief analysis of typical valuation multiples and metrics for companies in the {industry} industry within the {sector} sector.
 
-Include typical ranges for:
-- P/E ratios
-- P/B ratios
-- Revenue growth rates
-- Profit margins
-- Return on equity
 
-Respond in JSON format with:
-{{
-    "industry": "industry name",
-    "sector": "sector name",
-    "typical_pe_range": {{"low": number, "high": number}},
-    "typical_growth_rate": "X-Y%",
-    "typical_profit_margin": "X-Y%",
-    "key_industry_metrics": ["metric 1", "metric 2", ...],
-    "industry_outlook": "brief outlook"
-}}"""
+@st.cache_data(ttl=3600)
+def get_market_comparables(_self, symbol: str, sector: str, industry: str) -> Optional[str]:
+    """
+    Get AI-powered market comparables analysis
+    """
+    try:
+        prompt = (
+            f"Provide valuation multiples and metrics for companies in the {industry} "
+            f"industry within the {sector} sector. "
+            "\n\nInclude typical ranges for:\n"
+            "- P/E ratios\n"
+            "- P/B ratios\n"
+            "- Revenue growth rates\n"
+            "- Profit margins\n"
+            "- Return on equity\n\n"
+            "Respond in JSON format with:\n"
+            "{\n"
+            '    "industry": "industry name",\n'
+            '    "sector": "sector name",\n'
+            '    "typical_pe_range": {"low": number, "high": number},\n'
+            '    "typical_growth_rate": "X-Y%",\n'
+            '    "typical_profit_margin": "X-Y%",\n'
+            '    "key_industry_metrics": ["metric 1", "metric 2", ...],\n'
+            '    "industry_outlook": "brief outlook"\n'
+            "}"
+        )
 
-            response = _self.client.chat.completions.create(
-                model=_self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a financial analyst expert in industry analysis and valuation multiples."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                response_format={"type": "json_object"},
-                max_completion_tokens=2048
-            )
-            
-            return response.choices[0].message.content
-            
-        except Exception as e:
-            logger.error(f"Error getting market comparables: {str(e)}")
+        if _self.client is None:
+            logger.error("OpenAI client is not initialized")
             return None
+
+        response = _self.client.chat.completions.create(
+            model=_self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a financial analyst expert in industry analysis "
+                        "and valuation multiples."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            max_completion_tokens=2048,
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        logger.error(f"Error getting market comparables: {str(e)}")
+        return None
+
 
 ai_valuation_analyzer = AIValuationAnalyzer()

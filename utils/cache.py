@@ -59,11 +59,7 @@ class MemoryCache:
     def cleanup_expired(self) -> int:
         with self._lock:
             now = time.monotonic()
-            expired = [
-                key 
-                for key, value in self._cache.items()
-                if now > value["expires_at"]
-            ]
+            expired = [key for key, value in self._cache.items() if now > value["expires_at"]]
             for key in expired:
                 del self._cache[key]
             return len(expired)
@@ -98,7 +94,8 @@ def cached(ttl: Optional[int] = None, key_func: Optional[Callable[..., str]] = N
                     ).hexdigest()
                 except (pickle.PickleError, TypeError, AttributeError) as exc:
                     _log.warning(
-                        "cache: pickle serialisation failed for %s; falling back to repr. Error: %s",
+                        "cache: pickle serialisation failed for %s; "
+                        "falling back to repr. Error: %s",
                         func_id,
                         exc,
                     )
