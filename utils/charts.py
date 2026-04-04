@@ -307,8 +307,7 @@ def create_risk_metrics_chart(risk_data):
         fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.6)
 
         title = (
-            f"Risk Ratios — {risk_data.get('symbol', '')} vs "
-            f"{risk_data.get('benchmark', '^GSPC')}"
+            f"Risk Ratios — {risk_data.get('symbol', '')} vs {risk_data.get('benchmark', '^GSPC')}"
         )
         fig.update_layout(
             title=title,

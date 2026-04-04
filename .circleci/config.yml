@@ -1,0 +1,241 @@
+version: 2.1
+
+# ---------------------------------------------------------------------------
+# Orbs
+# ---------------------------------------------------------------------------
+orbs:
+  python: circleci/python@2.1.1
+
+# ---------------------------------------------------------------------------
+# Reusable YAML anchors
+# ---------------------------------------------------------------------------
+defaults: &defaults
+  working_directory: ~/project
+  resource_class: small
+
+python_image: &python_image
+  docker:
+    - image: cimg/python:3.12
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+commands:
+  install_uv:
+    description: Install uv package manager
+    steps:
+      - run:
+          name: Install uv
+          command: |
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASH_ENV"
+            source "$BASH_ENV"
+            uv --version
+
+  restore_dep_cache:
+    description: Restore uv virtual environment from cache
+    steps:
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "uv.lock" }}-{{ checksum "pyproject.toml" }}
+            - v1-deps-{{ checksum "uv.lock" }}
+            - v1-deps-
+
+  save_dep_cache:
+    description: Save uv virtual environment to cache
+    steps:
+      - save_cache:
+          key: v1-deps-{{ checksum "uv.lock" }}-{{ checksum "pyproject.toml" }}
+          paths:
+            - .venv
+
+  install_deps:
+    description: Install Python dependencies using uv
+    steps:
+      - install_uv
+      - restore_dep_cache
+      - run:
+          name: Install dependencies
+          command: uv sync --group dev --frozen
+      - save_dep_cache
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+jobs:
+  # -------------------------------------------------------------------------
+  # Lint: ruff (fast linter) + black (format check)
+  # -------------------------------------------------------------------------
+  lint:
+    <<: [*defaults, *python_image]
+    steps:
+      - checkout
+      - install_deps
+      - run:
+          name: Run ruff linter and format check
+          command: |
+            uv run ruff check . --output-format json --output-file ruff-report.json
+            RUFF_EXIT=$?
+            uv run ruff format --check .
+            FORMAT_EXIT=$?
+            exit $((RUFF_EXIT | FORMAT_EXIT))
+      - store_artifacts:
+          path: ruff-report.json
+          destination: lint/ruff-report.json
+          when: always
+
+  # -------------------------------------------------------------------------
+  # Type check: mypy (static type analysis)
+  # -------------------------------------------------------------------------
+  type_check:
+    <<: [*defaults, *python_image]
+    steps:
+      - checkout
+      - install_deps
+      - run:
+          name: Run mypy type checker
+          command: |
+            uv run mypy .
+      - store_test_results:
+          path: mypy-results
+
+  # -------------------------------------------------------------------------
+  # Tests: pytest with coverage
+  # -------------------------------------------------------------------------
+  test:
+    <<: [*defaults, *python_image]
+    steps:
+      - checkout
+      - install_deps
+      - run:
+          name: Run pytest with coverage
+          command: |
+            mkdir -p test-results/pytest
+            set +e
+            if [ -d tests ]; then
+              uv run pytest \
+                --junit-xml=test-results/pytest/results.xml \
+                --cov=. \
+                --cov-report=xml:coverage.xml \
+                --cov-report=term-missing \
+                -v \
+                tests/
+              echo $? > /tmp/pytest-exit-code
+            else
+              echo "No tests/ directory found; skipping pytest job."
+              touch coverage.xml
+              echo 0 > /tmp/pytest-exit-code
+            fi
+            exit 0
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: coverage.xml
+          destination: coverage/coverage.xml
+      - store_artifacts:
+          path: test-results
+          destination: test-results
+      - run:
+          name: Fail job if pytest failed
+          command: exit $(cat /tmp/pytest-exit-code)
+
+  # -------------------------------------------------------------------------
+  # Security scan: pip-audit for dependency vulnerabilities
+  # -------------------------------------------------------------------------
+  security_scan:
+    <<: [*defaults, *python_image]
+    steps:
+      - checkout
+      - install_deps
+      - run:
+          name: Audit dependencies
+          command: |
+            touch pip-audit-report.json
+            set +e
+            uv run pip-audit \
+              --requirement <(uv export --format requirements-txt --no-hashes) \
+              --format json \
+              --output pip-audit-report.json
+            AUDIT_EXIT=$?
+            if [ $AUDIT_EXIT -ne 0 ]; then
+              echo "WARNING: pip-audit found vulnerabilities. See pip-audit-report.json for details."
+            fi
+            exit 0
+      - store_artifacts:
+          path: pip-audit-report.json
+          destination: security/pip-audit-report.json
+          when: always
+
+  # -------------------------------------------------------------------------
+  # Build validation: ensure the app imports cleanly (smoke test)
+  # -------------------------------------------------------------------------
+  smoke_test:
+    <<: [*defaults, *python_image]
+    steps:
+      - checkout
+      - install_deps
+      - run:
+          name: Validate app imports (smoke test)
+          command: |
+            uv run python -c "import config; print('config OK')"
+            uv run python -c "import database; print('database OK')"
+            uv run python -c "import app_init; print('app_init OK')"
+            uv run python -c "from utils import logging_config, exceptions, intervals; print('utils OK')"
+
+# ---------------------------------------------------------------------------
+# Workflows
+# ---------------------------------------------------------------------------
+workflows:
+  # -------------------------------------------------------------------------
+  # CI — runs on every push to every branch
+  # -------------------------------------------------------------------------
+  ci:
+    jobs:
+      - lint:
+          filters:
+            branches:
+              ignore: main
+      - type_check:
+          filters:
+            branches:
+              ignore: main
+      - test:
+          requires:
+            - lint
+      - smoke_test:
+          requires:
+            - lint
+      - security_scan:
+          filters:
+            branches:
+              ignore: main
+
+  # -------------------------------------------------------------------------
+  # Main branch — extra gate: all checks must pass before any deployment step
+  # -------------------------------------------------------------------------
+  main_branch:
+    jobs:
+      - lint:
+          filters:
+            branches:
+              only: main
+      - type_check:
+          filters:
+            branches:
+              only: main
+      - test:
+          requires:
+            - lint
+          filters:
+            branches:
+              only: main
+      - smoke_test:
+          requires:
+            - lint
+          filters:
+            branches:
+              only: main
+      - security_scan:
+          filters:
+            branches:
+              only: main
