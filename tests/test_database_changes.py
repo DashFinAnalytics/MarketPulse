@@ -59,7 +59,7 @@ class TestDatabaseManagerGetSession:
         manager = db_mod.DatabaseManager()
         with patch("database.get_session_factory", return_value=None):
             try:
-                result = manager.get_session()
+                manager.get_session()
             except RuntimeError as exc:
                 pytest.fail(
                     f"get_session() should not raise RuntimeError when factory is None, "
