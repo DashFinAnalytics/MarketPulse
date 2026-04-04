@@ -9,7 +9,6 @@ Changed in this PR:
 from __future__ import annotations
 
 import sys
-from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
