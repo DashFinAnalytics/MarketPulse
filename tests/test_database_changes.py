@@ -33,14 +33,11 @@ def _import_db_module():
 # DatabaseManager.get_session() - key PR change
 # ---------------------------------------------------------------------------
 
-class TestDatabaseManagerGetSession:
-    """get_session() must return None (not raise) when the session factory is unavailable."""
-
-    def test_returns_none_when_factory_is_none(self):
-        import database as db_mod
-        manager = db_mod.DatabaseManager()
-        with patch("database.get_session_factory", return_value=None):
-            result = manager.get_session()
+def get_session(self) -> Optional[Session]:
+        factory = get_session_factory()
+        if factory is None:
+            return None
+        return factory()
         assert result is None
 
     def test_returns_session_when_factory_available(self):
