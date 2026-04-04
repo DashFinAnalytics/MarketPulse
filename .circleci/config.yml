@@ -56,7 +56,7 @@ commands:
       - restore_dep_cache
       - run:
           name: Install dependencies
-          command: uv sync --extra dev --frozen
+          command: uv sync --group dev --frozen
       - save_dep_cache
 
 # ---------------------------------------------------------------------------
@@ -73,7 +73,12 @@ jobs:
       - install_deps
       - run:
           name: Run ruff linter and format check
-          command: uv run ruff check . && uv run ruff format --check .
+          command: |
+            uv run ruff check . --output-format json --output-file ruff-report.json
+            RUFF_EXIT=$?
+            uv run ruff format --check .
+            FORMAT_EXIT=$?
+            exit $((RUFF_EXIT | FORMAT_EXIT))
       - store_artifacts:
           path: ruff-report.json
           destination: lint/ruff-report.json
@@ -118,6 +123,7 @@ jobs:
               echo $? > /tmp/pytest-exit-code
             else
               echo "No tests/ directory found; skipping pytest job."
+              touch coverage.xml
               echo 0 > /tmp/pytest-exit-code
             fi
             exit 0
@@ -188,11 +194,11 @@ workflows:
       - lint:
           filters:
             branches:
-              ignore: []
+              ignore: main
       - type_check:
           filters:
             branches:
-              ignore: []
+              ignore: main
       - test:
           requires:
             - lint
@@ -202,7 +208,7 @@ workflows:
       - security_scan:
           filters:
             branches:
-              ignore: []
+              ignore: main
 
   # -------------------------------------------------------------------------
   # Main branch — extra gate: all checks must pass before any deployment step
