@@ -5,7 +5,6 @@ This module was changed in the PR; tests cover all classmethods.
 from __future__ import annotations
 
 import pytest
-from datetime import datetime
 
 from utils.intervals import FinanceIntervals
 
