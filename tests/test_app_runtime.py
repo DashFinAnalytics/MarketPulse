@@ -22,7 +22,6 @@ if "streamlit" not in sys.modules:
 # ---------------------------------------------------------------------------
 # We import the module under test after ensuring streamlit is mocked.
 # ---------------------------------------------------------------------------
-import importlib
 import refactor_staging.pr3.app_runtime as app_runtime_module
 
 # Re-expose the functions we're testing for convenience
