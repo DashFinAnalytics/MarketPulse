@@ -38,7 +38,7 @@ def get_session(self) -> Optional[Session]:
         if factory is None:
             return None
         return factory()
-        assert result is None
+
 
     def test_returns_session_when_factory_available(self):
         import database as db_mod
