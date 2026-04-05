@@ -8,7 +8,7 @@ import sys
 import types
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 # ── Streamlit stub (must be applied before importing news_fetcher) ───────────
