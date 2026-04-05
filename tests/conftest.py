@@ -74,8 +74,11 @@ else:
 
 def _make_sqlalchemy_mock() -> None:
     """Inject lightweight structural mocks for sqlalchemy and sub-packages."""
-    if "sqlalchemy" in sys.modules:
-        return  # Real library is available; use it.
+    try:
+        import sqlalchemy  # noqa: F401
+        return  # Real library is installed; use it.
+    except ImportError:
+        pass
 
     sa = MagicMock(name="sqlalchemy")
     # Column constructors need to return something usable as a class attribute
