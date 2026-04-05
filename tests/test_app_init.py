@@ -35,7 +35,6 @@ class TestGetGitSha:
 
     def test_returns_sha_when_git_available(self):
         """When git runs successfully, returns the stdout (trimmed)."""
-        import subprocess
         from app_init import _get_git_sha
         mock_result = MagicMock()
         mock_result.stdout = "abc1234\n"
