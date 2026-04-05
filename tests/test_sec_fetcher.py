@@ -15,7 +15,7 @@ class TestBuildFilingUrl:
     def test_none_like_falsy_returns_empty(self):
         from utils.sec_fetcher import _build_filing_url
         # Per the implementation: if not file_id -> return ''
-        assert _build_filing_url("") == ""
+        assert _build_filing_url(None) == ""
 
     def test_valid_id_returns_url_with_id(self):
         from utils.sec_fetcher import _build_filing_url
