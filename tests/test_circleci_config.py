@@ -268,15 +268,12 @@ class TestWorkflows:
         """All jobs in main_branch workflow must have branch filter for 'main' only."""
         main_jobs = circleci_config["workflows"]["main_branch"]["jobs"]
         for job_entry in main_jobs:
-            if isinstance(job_entry, dict):
-                job_name = list(job_entry.keys())[0]
-                job_config = job_entry[job_name]
-                filters = job_config.get("filters", {})
-                branches = filters.get("branches", {})
-                # Jobs either have an "only: main" filter or inherit via requires
-                # Lint, type_check, security_scan have explicit filters; test and smoke_test
-                # inherit through requires. Check those with explicit filters.
-                if "filters" in job_config:
+            assert isinstance(job_entry, dict), "Each main_branch workflow job must be configured as a mapping"
+            job_name = list(job_entry.keys())[0]
+            job_config = job_entry[job_name]
+            assert isinstance(job_config, dict), f"Job '{job_name}' must have a config mapping"
+            filters = job_config.get("filters", {})
+            branches = filters.get("branches", {})
                     only = branches.get("only")
                     assert only == "main", (
                         f"Job '{job_name}' in main_branch workflow must filter to 'main' branch, "
