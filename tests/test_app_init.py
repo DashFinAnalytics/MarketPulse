@@ -1,6 +1,5 @@
 """Tests for app_init.py — AppInitializer and related functions."""
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 
