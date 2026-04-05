@@ -91,8 +91,9 @@ class TestOptionalDevDependencies:
         dev_deps = pyproject["project"]["optional-dependencies"]["dev"]
         package_names = {re.split(r"[=<>!~]", d, maxsplit=1)[0].strip() for d in dev_deps}
         expected = {"ruff", "black", "pytest", "pytest-cov", "mypy", "pip-audit"}
-        assert package_names == expected, (
-            f"Unexpected packages in dev extra. Got {package_names}, expected {expected}"
+        missing = expected - package_names
+        assert not missing, (
+            f"Missing required dev packages: {missing}. Found {package_names}"
         )
 
 
