@@ -24,6 +24,7 @@ dependencies = [
     "pillow>=11.3.0",
     "protobuf>=6.33.5",
     "tornado>=6.5.5",
+    "pytz>=2024.1",
 ]
 
 [project.optional-dependencies]
