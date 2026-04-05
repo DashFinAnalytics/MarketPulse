@@ -214,7 +214,7 @@ class TestDatabaseManagerHealthCheck:
         manager = DatabaseManager()
         with patch.object(pr2_db, "get_db_session", side_effect=DatabaseError("unavailable")):
             assert manager.health_check() is False
-
+                with pr2_db.get_db_session():
     def test_returns_true_when_db_available(self):
         manager = DatabaseManager()
 
