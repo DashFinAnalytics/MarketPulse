@@ -62,14 +62,11 @@ def get_session(self) -> Optional[Session]:
                     f"but got: {exc}"
                 )
 
-    def test_return_type_annotation_is_optional_session(self):
-        """Verify the function signature reflects Optional[Session]."""
+    def test_return_type_annotation_is_session(self):
         import database as db_mod
-        import inspect
         hints = db_mod.DatabaseManager.get_session.__annotations__
-        # Accept both typing.Optional[Session] and a union type
-        return_hint = hints.get("return", None)
-        assert return_hint is not None, "get_session should have a return type annotation"
+        return_hint = hints.get("return")
+        assert return_hint is db_mod.Session, "get_session should be annotated to return Session"
 
 
 # ---------------------------------------------------------------------------
