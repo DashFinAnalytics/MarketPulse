@@ -100,11 +100,18 @@ class TestLockFileIntegrity:
 
     def test_urllib3_2_6_3_is_newer_than_2_5_0(self):
         """Sanity check: 2.6.3 > 2.5.0 per semantic versioning."""
-        from packaging.version import Version  # type: ignore[import-untyped]
+        try:
+            from packaging.version import Version  # type: ignore[import-untyped]
 
-        assert Version("2.6.3") > Version("2.5.0"), (
-            "2.6.3 must be a newer version than 2.5.0"
-        )
+            assert Version("2.6.3") > Version("2.5.0"), (
+                "2.6.3 must be a newer version than 2.5.0"
+            )
+        except ImportError:
+            newer_parts = tuple(int(x) for x in "2.6.3".split("."))
+            older_parts = tuple(int(x) for x in "2.5.0".split("."))
+            assert newer_parts > older_parts, (
+                "2.6.3 must be a newer version than 2.5.0"
+            )
 
     def test_urllib3_version_satisfies_pyproject_constraint(
         self, uv_lock_content
