@@ -86,10 +86,17 @@ class TestCommands:
         assert "steps" in cmd
         assert len(cmd["steps"]) > 0
 
-    def test_restore_dep_cache_uses_uv_lock_checksum(self, circleci_raw):
+    def test_restore_dep_cache_uses_uv_lock_checksum(self, circleci_config):
         """Cache key must include uv.lock checksum for proper invalidation."""
-        assert 'checksum "uv.lock"' in circleci_raw, (
-            "Cache key should include checksum of uv.lock"
+        restore_steps = circleci_config["commands"]["restore_dep_cache"]["steps"]
+        restore_step = next(
+            (s for s in restore_steps if isinstance(s, dict) and "restore_cache" in s),
+            None,
+        )
+        assert restore_step is not None, "restore_dep_cache must define a restore_cache step"
+        keys = restore_step["restore_cache"].get("keys", [])
+        assert any('checksum "uv.lock"' in key for key in keys), (
+            "restore_dep_cache keys should include checksum of uv.lock"
         )
 
     def test_restore_dep_cache_uses_pyproject_checksum(self, circleci_raw):
