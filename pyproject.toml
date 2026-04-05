@@ -36,6 +36,8 @@ dev = [
     "pip-audit",
     "types-requests",
     "types-pytz",
+    "packaging",
+    "pyyaml",
 ]
 
 [tool.pytest.ini_options]
