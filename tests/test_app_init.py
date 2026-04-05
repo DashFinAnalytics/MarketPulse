@@ -126,7 +126,7 @@ class TestAppInitializer:
         with patch("app_init.config") as mock_cfg:
             mock_cfg.database.is_available = True
         with patch("builtins.__import__", side_effect=ImportError("no db")):
-                init._initialize_database()
+            init._initialize_database()
         assert init.initialization_status["database"]["status"] == "degraded"
         assert "no db" in init.initialization_status["database"]["error"]    
 
