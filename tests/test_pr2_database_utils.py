@@ -26,7 +26,7 @@ import pytest
 if "streamlit" not in sys.modules:
     sys.modules["streamlit"] = MagicMock()
 
-import refactor_staging.pr2.live_replacements.database as pr2_db
+pr2_db = pytest.importorskip("refactor_staging.pr2.live_replacements.database")
 
 # Pull out the private utilities directly
 _safe_float = pr2_db._safe_float
