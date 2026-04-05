@@ -274,11 +274,11 @@ class TestWorkflows:
             assert isinstance(job_config, dict), f"Job '{job_name}' must have a config mapping"
             filters = job_config.get("filters", {})
             branches = filters.get("branches", {})
-                    only = branches.get("only")
-                    assert only == "main", (
-                        f"Job '{job_name}' in main_branch workflow must filter to 'main' branch, "
-                        f"got: {only!r}"
-                    )
+            only = branches.get("only")
+            assert only == "main", (
+                f"Job '{job_name}' in main_branch workflow must filter to 'main' branch, "
+                f"got: {only!r}"
+            )
 
     def test_main_branch_workflow_includes_all_jobs(self, circleci_config):
         main_jobs = circleci_config["workflows"]["main_branch"]["jobs"]
