@@ -1,7 +1,6 @@
 """Tests for utils/sec_fetcher.py — SEC EDGAR data fetcher."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 # ── _build_filing_url ────────────────────────────────────────────────────────
