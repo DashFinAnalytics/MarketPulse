@@ -160,7 +160,8 @@ class TestRunMonteCarlo:
         from utils.backtester import run_monte_carlo
         empty = pd.Series([], dtype=float)
         result = run_monte_carlo(empty)
-        assert result is None
+        assert result is not None
+        assert np.isnan(result["median"])
 
     def test_consistent_with_positive_drift(self):
         """Positive drift → median final value > initial capital."""
