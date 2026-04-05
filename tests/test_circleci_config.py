@@ -136,8 +136,14 @@ class TestJobs:
     def test_lint_job_runs_ruff_format_check(self, circleci_raw):
         assert "ruff format --check" in circleci_raw, "lint job must run ruff format --check"
 
-    def test_type_check_job_runs_mypy(self, circleci_raw):
-        assert "mypy" in circleci_raw, "type_check job must run mypy"
+    def test_type_check_job_runs_mypy(self, circleci_config):
+        steps = circleci_config["jobs"]["type_check"].get("steps", [])
+        run_cmds = [
+            step["run"].get("command", "")
+            for step in steps
+            if isinstance(step, dict) and "run" in step and isinstance(step["run"], dict)
+        ]
+        assert any("mypy" in cmd for cmd in run_cmds), "type_check job must run mypy"
 
     def test_test_job_runs_pytest(self, circleci_raw):
         assert "pytest" in circleci_raw, "test job must invoke pytest"
