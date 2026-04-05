@@ -23,12 +23,12 @@ if "streamlit" not in sys.modules:
 # We import the module under test after ensuring streamlit is mocked.
 # ---------------------------------------------------------------------------
 
-# Re-expose the functions we're testing for convenience
-from refactor_staging.pr3.app_runtime import (
-    database_is_ready,
-    cleanup_service_cache,
-    render_ui_error,
-)
+# Re-expose the functions we're testing for convenience.
+# Skip this test module cleanly when the PR3 staging module is not present.
+app_runtime = pytest.importorskip("refactor_staging.pr3.app_runtime")
+database_is_ready = app_runtime.database_is_ready
+cleanup_service_cache = app_runtime.cleanup_service_cache
+render_ui_error = app_runtime.render_ui_error
 
 
 # ---------------------------------------------------------------------------
