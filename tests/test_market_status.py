@@ -204,6 +204,5 @@ class TestGetMajorMarketHours:
             # Also provide the utc datetime
             mock_dt.now.side_effect = lambda tz=None: saturday_utc
             result = get_major_market_hours()
-        # We can't fully control since datetime.now is called twice in the function,
-        # but we can at least verify the list is non-empty and has valid structure
         assert len(result) > 0
+        assert all(entry["status"] == "CLOSED" for entry in result)
