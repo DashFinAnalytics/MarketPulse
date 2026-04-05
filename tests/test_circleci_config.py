@@ -145,8 +145,14 @@ class TestJobs:
         ]
         assert any("mypy" in cmd for cmd in run_cmds), "type_check job must run mypy"
 
-    def test_test_job_runs_pytest(self, circleci_raw):
-        assert "pytest" in circleci_raw, "test job must invoke pytest"
+    def test_test_job_runs_pytest(self, circleci_config):
+        steps = circleci_config["jobs"]["test"].get("steps", [])
+        run_cmds = [
+            step["run"].get("command", "")
+            for step in steps
+            if isinstance(step, dict) and "run" in step and isinstance(step["run"], dict)
+        ]
+        assert any("pytest" in cmd for cmd in run_cmds), "test job must invoke pytest"
 
     def test_test_job_generates_coverage_xml(self, circleci_raw):
         assert "coverage.xml" in circleci_raw, (
