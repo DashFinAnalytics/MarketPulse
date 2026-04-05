@@ -83,8 +83,8 @@ class TestFinanceNewsFetcherInit:
         fetcher = _get_fetcher()
         source_names = {source.name for source in fetcher.NEWS_SOURCES.values()}
         assert "MarketWatch" in source_names
-        assert "Seeking Alpha" in source_names
-        assert "Investor's Business Daily" in source_names
+        assert "Reuters Business" in source_names
+        assert "Yahoo Finance" in source_names
 
     def test_get_available_sources_returns_dict(self):
         fetcher = _get_fetcher()
