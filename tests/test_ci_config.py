@@ -460,4 +460,6 @@ class TestCiConfigRegression:
             if isinstance(s, dict) and "run" in s and isinstance(s["run"], dict)
         ]
         all_cmds = " ".join(run_cmds)
-        assert "utils" in all_cmds, "smoke_test should test utils imports"
+        assert "from utils import" in all_cmds, "smoke_test should include an explicit utils import"
+        for submodule in ("logging_config", "exceptions", "intervals"):
+            assert submodule in all_cmds, f"smoke_test should import utils.{submodule}"
