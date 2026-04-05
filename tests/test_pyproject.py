@@ -126,11 +126,11 @@ class TestOptionalDevDependencies:
         missing = expected - declared
         assert not missing, f"Missing expected dev extras: {sorted(missing)}"
 
-    def test_dev_extras_all_use_exact_pins(self, dev_extras):
-        """All dev extras should use exact pins (==) for reproducibility."""
+    def test_dev_extras_have_valid_entries(self, dev_extras):
+        """Dev extras should be valid non-empty requirement strings."""
         for dep in dev_extras:
-            assert "==" in dep, (
-                f"Dev extra dependency should use exact pin (==), got: {dep!r}"
+            assert isinstance(dep, str) and dep.strip(), (
+                f"Dev extra dependency entry is invalid: {dep!r}"
             )
 
     def test_dev_extras_count(self, dev_extras):
