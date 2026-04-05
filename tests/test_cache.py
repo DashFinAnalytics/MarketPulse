@@ -88,8 +88,6 @@ class TestMemoryCache:
 
     def test_thread_safety(self):
         c = self._make_cache()
-        errors = []
-
         from concurrent.futures import ThreadPoolExecutor
 
         def writer():
@@ -106,6 +104,8 @@ class TestMemoryCache:
             ]
             for fut in futures:
                 fut.result()
+
+        assert c.stats()["total_entries"] == 100
 
 
 # ── cached decorator ─────────────────────────────────────────────────────────
