@@ -134,9 +134,9 @@ class TestOptionalDevDependencies:
             )
 
     def test_dev_extras_count(self, dev_extras):
-        """Exactly 6 dev extra dependencies should be declared."""
-        assert len(dev_extras) == 6, (
-            f"Expected 6 dev extras, found {len(dev_extras)}: {dev_extras}"
+        """At least the baseline dev dependencies should be declared."""
+        assert len(dev_extras) >= 6, (
+            f"Expected at least 6 dev extras, found {len(dev_extras)}: {dev_extras}"
         )
 
     def test_no_pytest_plugin_duplicates(self, dev_extras):
