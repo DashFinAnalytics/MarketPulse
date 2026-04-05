@@ -356,14 +356,12 @@ class TestWorkflows:
         """Every job in main_branch workflow must filter to branch: main only."""
         jobs = ci_config["workflows"]["main_branch"]["jobs"]
         for entry in jobs:
-            if isinstance(entry, dict):
-                job_name, job_cfg = next(iter(entry.items()))
-                if isinstance(job_cfg, dict) and "filters" in job_cfg:
-                    branches = job_cfg["filters"].get("branches", {})
-                    only = branches.get("only")
-                    if only is not None:
-                        assert only == "main", (
-                            f"Job '{job_name}' in main_branch filters to '{only}', expected 'main'"
+            assert isinstance(entry, dict), "Each main_branch workflow job must define filter configuration"
+            job_name, job_cfg = next(iter(entry.items()))
+            assert isinstance(job_cfg, dict), f"Job '{job_name}' must provide workflow settings"
+            branches = job_cfg.get("filters", {}).get("branches", {})
+            assert branches.get("only") == "main", (
+                f"Job '{job_name}' must filter to branch 'main'"
                         )
 
     def test_main_branch_workflow_lint_only_main(self, ci_config: dict) -> None:
