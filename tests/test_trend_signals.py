@@ -302,7 +302,7 @@ class TestBatchTrendSignals:
         from utils.trend_signals import batch_trend_signals
         symbols = ["SPY", "QQQ", "DIA"]
         with patch("utils.trend_signals.compute_trend_signal") as mock_compute:
-            mock_compute.side_effect = lambda sym, **kwargs: {"symbol": sym, "direction": "UP"}
+            mock_compute.side_effect = lambda sym, lookback_days: {"symbol": sym, "direction": "UP"}
             result = batch_trend_signals(symbols)
         result_symbols = [r["symbol"] for r in result]
         assert result_symbols == symbols
