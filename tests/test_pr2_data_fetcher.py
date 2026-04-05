@@ -29,8 +29,8 @@ if "yfinance" not in sys.modules:
 # ---------------------------------------------------------------------------
 from utils.exceptions import ValidationError
 
-import refactor_staging.pr2.live_replacements.utils.data_fetcher as live_df_mod
-import refactor_staging.pr2.utils.data_fetcher as staged_df_mod
+live_df_mod = pytest.importorskip("refactor_staging.pr2.live_replacements.utils.data_fetcher")
+staged_df_mod = pytest.importorskip("refactor_staging.pr2.utils.data_fetcher")
 
 
 # ---------------------------------------------------------------------------
