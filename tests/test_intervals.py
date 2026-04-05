@@ -1,7 +1,6 @@
 """Tests for utils/intervals.py — FinanceIntervals class."""
 
 import pytest
-from datetime import datetime
 from utils.intervals import FinanceIntervals
 
 
