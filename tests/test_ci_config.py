@@ -384,8 +384,8 @@ class TestWorkflows:
                 job_name, job_cfg = next(iter(entry.items()))
                 if job_name in independent_jobs:
                     requires = job_cfg.get("requires", []) if isinstance(job_cfg, dict) else []
-                    assert "lint" not in requires, (
-                        f"Job '{job_name}' should not require lint in ci workflow"
+                    assert requires == [], (
+                        f"Job '{job_name}' should have no requires dependencies in ci workflow"
                     )
 
 
