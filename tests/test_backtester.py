@@ -82,7 +82,7 @@ class TestStats:
         equity = [10000, 9500]
         result = _stats(trades, equity, 10000, df, "Strategy", "SPY")
         assert result["win_rate"] == 0.0
-        assert result["profit_factor"] == 999  # No wins → infinity capped at 999
+        assert result["profit_factor"] == 0.0  # No winning trades with losses yields zero profit factor
 
     def test_total_return_calculation(self):
         _stats = self._import_stats()
