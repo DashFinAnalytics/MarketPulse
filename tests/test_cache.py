@@ -1,9 +1,6 @@
 """Tests for utils/cache.py — MemoryCache, cached decorator, and key helpers."""
 
 import time
-import threading
-import pytest
-from unittest.mock import patch, MagicMock
 
 
 # ── MemoryCache ──────────────────────────────────────────────────────────────
