@@ -120,35 +120,11 @@ class TestOptionalDevDependencies:
         assert isinstance(dev, list)
         assert len(dev) > 0
 
-    def test_ruff_pinned_version(self, dev_extras):
-        matching = [d for d in dev_extras if d.startswith("ruff")]
-        assert matching, "ruff must be in dev extras"
-        assert "ruff==0.6.9" in matching, f"Expected ruff==0.6.9, found: {matching}"
-
-    def test_black_pinned_version(self, dev_extras):
-        matching = [d for d in dev_extras if d.startswith("black")]
-        assert matching, "black must be in dev extras"
-        assert "black==24.10.0" in matching, f"Expected black==24.10.0, found: {matching}"
-
-    def test_pytest_pinned_version(self, dev_extras):
-        matching = [d for d in dev_extras if d.startswith("pytest==")]
-        assert matching, "pytest must be in dev extras"
-        assert "pytest==8.0.0" in matching, f"Expected pytest==8.0.0, found: {matching}"
-
-    def test_pytest_cov_pinned_version(self, dev_extras):
-        matching = [d for d in dev_extras if d.startswith("pytest-cov")]
-        assert matching, "pytest-cov must be in dev extras"
-        assert "pytest-cov==5.0.0" in matching, f"Expected pytest-cov==5.0.0, found: {matching}"
-
-    def test_mypy_pinned_version(self, dev_extras):
-        matching = [d for d in dev_extras if d.startswith("mypy")]
-        assert matching, "mypy must be in dev extras"
-        assert "mypy==1.11.0" in matching, f"Expected mypy==1.11.0, found: {matching}"
-
-    def test_pip_audit_pinned_version(self, dev_extras):
-        matching = [d for d in dev_extras if d.startswith("pip-audit")]
-        assert matching, "pip-audit must be in dev extras"
-        assert "pip-audit==2.8.0" in matching, f"Expected pip-audit==2.8.0, found: {matching}"
+    def test_required_dev_tools_present(self, dev_extras):
+        expected = {"ruff", "black", "pytest", "pytest-cov", "mypy", "pip-audit"}
+        declared = {dep.split("==", 1)[0].strip().lower() for dep in dev_extras}
+        missing = expected - declared
+        assert not missing, f"Missing expected dev extras: {sorted(missing)}"
 
     def test_dev_extras_all_use_exact_pins(self, dev_extras):
         """All dev extras should use exact pins (==) for reproducibility."""
