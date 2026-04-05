@@ -220,7 +220,12 @@ class TestGetSectorNews:
         with patch.object(self.fetcher, "get_market_news", return_value=articles):
             result = self.fetcher.get_sector_news("technology")
         titles = [a["title"] for a in result]
-        assert any("AI" in t or "Tech" in t or "artificial intelligence" in t.lower() for t in titles)
+        assert any(
+            "AI" in t
+            or "Tech" in t
+            or "artificial intelligence" in t.lower()
+            for t in titles
+        )
 
     def test_unknown_sector_uses_sector_name_as_keyword(self):
         articles = self._articles_with([
